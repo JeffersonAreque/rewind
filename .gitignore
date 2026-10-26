@@ -32,6 +32,7 @@ build/
 
 # Editors / OS / local tool settings
 .claude/settings.local.json
+.playwright-mcp/
 .vscode/
 .idea/
 .DS_Store

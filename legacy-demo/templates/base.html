@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }} - SISTEMA DE FACTURACION</title>
+  <link rel="icon" href="{{ url_for('static', filename='icons/app.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/98css/98.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='legacy.css') }}">
+</head>
+<body class="desktop">
+  {% block desktop %}{% endblock %}
+
+  {% if dialog %}
+  <div class="modal" id="dialog" data-focus="{{ dialog.focus or '' }}">
+    <div class="window dialog" role="alertdialog" aria-labelledby="dialog-title">
+      <div class="title-bar">
+        <div class="title-bar-text" id="dialog-title">{{ dialog.title }}</div>
+        <div class="title-bar-controls">
+          <button aria-label="Close" data-close></button>
+        </div>
+      </div>
+      <div class="window-body">
+        <img src="{{ url_for('static', filename='icons/' ~ dialog.kind ~ '.svg') }}" width="32" height="32" alt="">
+        <div class="message">
+          <p>{{ dialog.message }}</p>
+          {% if dialog.detail %}<p>{{ dialog.detail }}</p>{% endif %}
+        </div>
+      </div>
+      <div class="actions">
+        <button data-close>ACEPTAR</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="taskbar">
+    <button class="start-button" type="button">
+      <img src="{{ url_for('static', filename='icons/windows.svg') }}" alt="">INICIO
+    </button>
+    <button class="task-button" type="button">
+      <img src="{{ url_for('static', filename='icons/app.svg') }}" alt="">FACTURACION v2.3
+    </button>
+    <div class="tray" id="clock"></div>
+  </div>
+
+  <script src="{{ url_for('static', filename='legacy.js') }}"></script>
+</body>
+</html>

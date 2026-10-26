@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block desktop %}
+<div class="window main-window">
+  <div class="title-bar">
+    <div class="title-bar-text">
+      <img src="{{ url_for('static', filename='icons/app.svg') }}" alt="">
+      SISTEMA DE FACTURACION v2.3 - [{{ title }}]
+    </div>
+    <div class="title-bar-controls">
+      <button aria-label="Minimize"></button>
+      <button aria-label="Maximize"></button>
+      <button aria-label="Close"></button>
+    </div>
+  </div>
+
+  <nav class="menubar">
+    <div class="menu">
+      <span tabindex="0"><u>A</u>RCHIVO</span>
+      <div class="dropdown">
+        <a href="{{ url_for('clientes') }}">CLIENTES...</a>
+        <a href="{{ url_for('facturas') }}">FACTURAS...</a>
+        <a href="{{ url_for('pagos') }}">PAGOS...</a>
+        <hr>
+        <a href="{{ url_for('logout') }}">CERRAR SESION</a>
+      </div>
+    </div>
+    <div class="menu"><a href="{{ url_for('clientes') }}" accesskey="c"><u>C</u>LIENTES</a></div>
+    <div class="menu"><a href="{{ url_for('facturas') }}" accesskey="f"><u>F</u>ACTURAS</a></div>
+    <div class="menu"><a href="{{ url_for('pagos') }}" accesskey="p"><u>P</u>AGOS</a></div>
+    <div class="menu"><a href="{{ url_for('acerca') }}" accesskey="y">A<u>Y</u>UDA</a></div>
+  </nav>
+
+  <div class="window-body">
+    {% block body %}{% endblock %}
+  </div>
+
+  <div class="status-bar">
+    <p class="status-bar-field">USUARIO: {{ usuario }}</p>
+    <p class="status-bar-field">{{ today }}</p>
+    <p class="status-bar-field">{{ status }}</p>
+  </div>
+</div>
+{% endblock %}
