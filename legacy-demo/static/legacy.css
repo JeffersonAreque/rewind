@@ -185,8 +185,20 @@ fieldset.grow > .sunken-panel {
   gap: 6px;
 }
 
+.buttons-row.end {
+  justify-content: flex-end;
+}
+
+.buttons-row button {
+  min-width: 120px;
+}
+
 input.amount {
   text-align: right;
+}
+
+.form-grid input.date, .form-grid input.amount {
+  width: 110px;
 }
 
 /* ---------- Gray grids ---------- */

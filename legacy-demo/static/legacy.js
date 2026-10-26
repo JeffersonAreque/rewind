@@ -44,6 +44,25 @@
     }
   });
 
+  // Grids: click selects a row, double-click runs the grid's action button.
+  document.querySelectorAll("table.interactive").forEach(function (table) {
+    var input = document.getElementById(table.dataset.selectInput);
+    var button = document.getElementById(table.dataset.selectButton);
+    table.querySelectorAll("tbody tr[data-id]").forEach(function (row) {
+      row.addEventListener("click", function () {
+        table.querySelectorAll("tr.highlighted").forEach(function (other) {
+          other.classList.remove("highlighted");
+        });
+        row.classList.add("highlighted");
+        input.value = row.dataset.id;
+        button.disabled = false;
+      });
+      row.addEventListener("dblclick", function () {
+        button.click();
+      });
+    });
+  });
+
   document.querySelectorAll("form").forEach(function (form) {
     form.addEventListener("submit", function () {
       document.body.classList.add("busy");

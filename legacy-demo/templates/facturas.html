@@ -1,0 +1,71 @@
+{% extends "app.html" %}
+{% block body %}
+<form method="get" action="{{ url_for('facturas') }}" autocomplete="off">
+  <input type="hidden" name="buscar" value="1">
+  <div class="form-row">
+    <fieldset>
+      <legend>CRITERIOS DE BUSQUEDA</legend>
+      <div class="form-grid">
+        <label for="numero">NRO. FACTURA:</label>
+        <input type="text" id="numero" name="numero" value="{{ form.numero }}" maxlength="11" autofocus>
+        <label for="cliente">CLIENTE:</label>
+        <select id="cliente" name="cliente">
+          <option value="">(TODOS)</option>
+          {% for c in clientes %}
+          <option value="{{ c.id }}" {{ 'selected' if form.cliente == c.id|string }}>{{ c.razon_social }}</option>
+          {% endfor %}
+        </select>
+        <label for="estado">ESTADO:</label>
+        <select id="estado" name="estado">
+          {% for e in estados %}
+          <option value="{{ e }}" {{ 'selected' if form.estado == e }}>{{ e or '(TODAS)' }}</option>
+          {% endfor %}
+        </select>
+        <label for="desde">FECHA DESDE:</label>
+        <input type="text" id="desde" name="desde" value="{{ form.desde }}" maxlength="10" placeholder="DD/MM/AAAA" class="date">
+        <label for="hasta">FECHA HASTA:</label>
+        <input type="text" id="hasta" name="hasta" value="{{ form.hasta }}" maxlength="10" placeholder="DD/MM/AAAA" class="date">
+      </div>
+    </fieldset>
+    <div class="buttons">
+      <button type="submit" accesskey="b"><u>B</u>USCAR</button>
+      <button type="button" accesskey="l" data-cancel onclick="location.href='{{ url_for('facturas') }}'"><u>L</u>IMPIAR</button>
+    </div>
+  </div>
+</form>
+
+<fieldset class="grow">
+  <legend>RESULTADOS</legend>
+  <div class="sunken-panel">
+    <table class="grid interactive" data-select-input="factura" data-select-button="pagar">
+      <thead>
+        <tr>
+          <th>NRO. FACTURA</th>
+          <th>FECHA</th>
+          <th>CLIENTE</th>
+          <th class="num">TOTAL</th>
+          <th class="num">SALDO</th>
+          <th>ESTADO</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in resultados %}
+        <tr data-id="{{ f.id }}" class="{{ 'highlighted' if f.id|string == selected }}">
+          <td>{{ f.numero }}</td>
+          <td>{{ f.fecha|dmy }}</td>
+          <td>{{ f.razon_social }}</td>
+          <td class="num">{{ f.total|soles }}</td>
+          <td class="num">{{ f.saldo|soles }}</td>
+          <td>{{ f.estado }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</fieldset>
+
+<form method="get" action="{{ url_for('pagos') }}" class="buttons-row end">
+  <input type="hidden" id="factura" name="factura" value="{{ selected or '' }}">
+  <button type="submit" id="pagar" accesskey="r" {{ '' if selected else 'disabled' }}><u>R</u>EGISTRAR PAGO</button>
+</form>
+{% endblock %}

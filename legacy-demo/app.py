@@ -11,7 +11,7 @@ import argparse
 import os
 import secrets
 import time
-from datetime import date
+from datetime import date, datetime
 from functools import wraps
 
 from flask import Flask, flash, get_flashed_messages, redirect, render_template, request, session, url_for
@@ -30,8 +30,12 @@ ERRORS = {
     "required": (0x0042, "CAMPO OBLIGATORIO"),
     "bad_document": (0x0071, "RUC/DNI INVALIDO"),
     "bad_email": (0x0075, "CORREO INVALIDO"),
+    "bad_date": (0x0057, "FECHA INVALIDA"),
     "duplicate_client": (0x0088, "CLIENTE YA REGISTRADO"),
+    "no_records": (0x00B2, "NO SE ENCONTRARON REGISTROS"),
 }
+
+ESTADOS = ("", "PENDIENTE", "PARCIAL", "PAGADA")
 
 CLIENTE_FIELDS = ("documento", "razon_social", "direccion", "telefono", "correo")
 CLIENTE_REQUIRED = {"documento": "RUC / DNI", "razon_social": "RAZON SOCIAL", "direccion": "DIRECCION"}
@@ -44,6 +48,24 @@ NO_ACCENTS = str.maketrans("ÁÉÍÓÚÜ", "AEIOUU")
 def legacy_text(value: str | None) -> str:
     """Uppercase, accent-free, single-spaced text, as the old system stored it."""
     return " ".join((value or "").split()).upper().translate(NO_ACCENTS)
+
+
+def parse_date(value: str) -> str | None:
+    """DD/MM/AAAA -> ISO date, or None if it is not a real date."""
+    try:
+        return datetime.strptime(value, "%d/%m/%Y").date().isoformat()
+    except ValueError:
+        return None
+
+
+@app.template_filter("dmy")
+def dmy(iso: str) -> str:
+    return date.fromisoformat(iso).strftime("%d/%m/%Y")
+
+
+@app.template_filter("soles")
+def soles(cents: int) -> str:
+    return f"S/ {cents / 100:,.2f}"
 
 
 def login_required(view):
@@ -163,10 +185,53 @@ def clientes():
     )
 
 
+def search_facturas(form: dict, conn) -> tuple[list, dict | None]:
+    where, params = [], []
+    if form["numero"]:
+        where.append("numero LIKE ?")
+        params.append(f"%{form['numero']}%")
+    if form["cliente"]:
+        where.append("cliente_id = ?")
+        params.append(form["cliente"])
+    if form["estado"] in ESTADOS[1:]:
+        where.append("estado = ?")
+        params.append(form["estado"])
+    for field, op in (("desde", ">="), ("hasta", "<=")):
+        if form[field]:
+            iso = parse_date(form[field])
+            if iso is None:
+                return [], error("bad_date", field, "FORMATO: DD/MM/AAAA")
+            where.append(f"fecha {op} ?")
+            params.append(iso)
+    sql = "SELECT * FROM facturas_saldo"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    rows = conn.execute(sql + " ORDER BY numero", params).fetchall()
+    return rows, None if rows else error("no_records", "numero")
+
+
 @app.route("/facturas")
 @login_required
 def facturas():
-    return screen("app.html", "BUSQUEDA DE FACTURAS")
+    form = {field: legacy_text(request.args.get(field)) for field in ("numero", "cliente", "estado", "desde", "hasta")}
+    resultados, dialog = [], None
+    with db.transaction() as conn:
+        clientes = conn.execute("SELECT id, razon_social FROM clientes ORDER BY razon_social").fetchall()
+        if request.args.get("buscar"):
+            resultados, dialog = search_facturas(form, conn)
+    saldo = sum(f["saldo"] for f in resultados)
+    status = f"{len(resultados)} REGISTROS - SALDO TOTAL {soles(saldo)}" if resultados else "LISTO"
+    return screen(
+        "facturas.html",
+        "BUSQUEDA DE FACTURAS",
+        dialog,
+        status=status,
+        form=form,
+        clientes=clientes,
+        estados=ESTADOS,
+        resultados=resultados,
+        selected=request.args.get("sel", ""),
+    )
 
 
 @app.route("/pagos")
