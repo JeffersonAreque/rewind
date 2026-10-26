@@ -24,6 +24,7 @@ frames/
 *.mkv
 *.mov
 *.avi
+*.webm
 
 # Node / builds
 node_modules/
