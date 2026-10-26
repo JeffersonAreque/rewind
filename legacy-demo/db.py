@@ -5,6 +5,8 @@ derived from its payments, so they can never drift apart.
 """
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from werkzeug.security import generate_password_hash
@@ -102,6 +104,17 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
+@contextmanager
+def transaction() -> Iterator[sqlite3.Connection]:
+    """Connection that commits on success, rolls back on error, and always closes."""
+    conn = connect()
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
+
+
 def init_db(reset: bool = False) -> None:
     """Create and seed the database if it does not exist (or if reset)."""
     if reset and DB_PATH.exists():
@@ -109,7 +122,7 @@ def init_db(reset: bool = False) -> None:
     if DB_PATH.exists():
         return
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with connect() as conn:
+    with transaction() as conn:
         conn.executescript(SCHEMA)
         conn.execute(
             "INSERT INTO usuarios (usuario, clave_hash) VALUES (?, ?)",
@@ -129,4 +142,3 @@ def init_db(reset: bool = False) -> None:
             "INSERT INTO pagos (factura_id, fecha, monto, metodo, operacion) VALUES (?, ?, ?, ?, ?)",
             [(factura_ids[f], d, m, met, op) for f, d, m, met, op in PAGOS],
         )
-    conn.close()

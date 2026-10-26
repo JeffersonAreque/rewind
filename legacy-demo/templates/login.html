@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block desktop %}
+<div class="window login-window">
+  <div class="title-bar">
+    <div class="title-bar-text">
+      <img src="{{ url_for('static', filename='icons/app.svg') }}" alt="">
+      INICIO DE SESION
+    </div>
+    <div class="title-bar-controls">
+      <button aria-label="Help"></button>
+      <button aria-label="Close"></button>
+    </div>
+  </div>
+  <div class="window-body">
+    <form method="post" action="{{ url_for('login') }}" autocomplete="off">
+      <div class="form-row">
+        <img src="{{ url_for('static', filename='icons/key.svg') }}" width="32" height="32" alt="">
+        <div>
+          <p>INGRESE SU USUARIO Y CLAVE DE ACCESO.</p>
+          <div class="form-grid login-grid">
+            <label for="usuario"><u>U</u>SUARIO:</label>
+            <input type="text" id="usuario" name="usuario" value="{{ form.usuario }}" accesskey="u" maxlength="20" autofocus>
+            <label for="clave"><u>C</u>LAVE:</label>
+            <input type="password" id="clave" name="clave" accesskey="c" maxlength="20">
+          </div>
+        </div>
+        <div class="buttons">
+          <button type="submit" accesskey="a"><u>A</u>CEPTAR</button>
+          <button type="reset" data-cancel>CANCELAR</button>
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="status-bar">
+    <p class="status-bar-field">SISTEMAS AMAZONIA S.R.L. (C) 1999</p>
+    <p class="status-bar-field">v2.3</p>
+  </div>
+</div>
+{% endblock %}

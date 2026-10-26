@@ -51,8 +51,16 @@ body.busy, body.busy * {
 }
 
 .login-window {
-  width: 380px;
+  width: 440px;
   margin: 200px auto 0;
+}
+
+.login-window .form-row {
+  padding: 8px 4px;
+}
+
+.form-grid.login-grid {
+  grid-template-columns: 60px 180px;
 }
 
 /* ---------- Menu bar ---------- */
@@ -218,6 +226,11 @@ table.grid .num {
   gap: 14px;
   align-items: flex-start;
   padding: 10px 8px 4px;
+}
+
+/* Messages come uppercased from the server; keep the "0x" of error codes. */
+.dialog .message {
+  text-transform: none;
 }
 
 .dialog .message p {

@@ -12,8 +12,10 @@ import os
 import secrets
 import time
 from datetime import date
+from functools import wraps
 
 from flask import Flask, flash, get_flashed_messages, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash
 
 import db
 
@@ -24,8 +26,27 @@ app.secret_key = os.getenv("LEGACY_SECRET_KEY") or secrets.token_hex(32)
 POST_DELAY_SECONDS = 0.35
 
 ERRORS = {
+    "bad_login": (0x0013, "USUARIO O CLAVE INCORRECTOS"),
     "required": (0x0042, "CAMPO OBLIGATORIO"),
 }
+
+# The old codepage had no accented vowels.
+NO_ACCENTS = str.maketrans("ÁÉÍÓÚÜ", "AEIOUU")
+
+
+def legacy_text(value: str | None) -> str:
+    """Uppercase, accent-free, single-spaced text, as the old system stored it."""
+    return " ".join((value or "").split()).upper().translate(NO_ACCENTS)
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if "usuario" not in session:
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+
+    return wrapper
 
 
 def error(kind: str, field: str | None = None, detail: str | None = None) -> dict:
@@ -64,29 +85,54 @@ def index():
     return redirect(url_for("clientes"))
 
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("index"))
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    form = {"usuario": legacy_text(request.form.get("usuario"))}
+    if request.method == "GET":
+        return screen("login.html", "INICIO DE SESION", form=form)
 
+    clave = request.form.get("clave", "")
+    if not form["usuario"]:
+        return screen("login.html", "INICIO DE SESION", error("required", "usuario", "USUARIO"), form=form)
+    if not clave:
+        return screen("login.html", "INICIO DE SESION", error("required", "clave", "CLAVE"), form=form)
 
-@app.route("/acerca")
-def acerca():
-    flash("SISTEMA DE FACTURACION v2.3 - (C) 1999 SISTEMAS AMAZONIA S.R.L.")
+    with db.transaction() as conn:
+        user =conn.execute("SELECT * FROM usuarios WHERE usuario = ?", (form["usuario"],)).fetchone()
+    if user is None or not check_password_hash(user["clave_hash"], clave):
+        return screen("login.html", "INICIO DE SESION", error("bad_login", "clave"), form=form)
+
+    session["usuario"] = user["usuario"]
     return redirect(url_for("clientes"))
 
 
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/acerca")
+@login_required
+def acerca():
+    flash("SISTEMA DE FACTURACION v2.3 - (C) 1999 SISTEMAS AMAZONIA S.R.L.")
+    return redirect(request.referrer or url_for("clientes"))
+
+
 @app.route("/clientes")
+@login_required
 def clientes():
     return screen("app.html", "REGISTRO DE CLIENTES")
 
 
 @app.route("/facturas")
+@login_required
 def facturas():
     return screen("app.html", "BUSQUEDA DE FACTURAS")
 
 
 @app.route("/pagos")
+@login_required
 def pagos():
     return screen("app.html", "REGISTRAR PAGO")
 
