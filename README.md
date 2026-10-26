@@ -59,6 +59,12 @@ uv run python -m rewind config
 
 Para cambiar de proveedor, edita `REWIND_PROVIDER` en `.env` (`fireworks` o `baseten`).
 
+Probar el proveedor con una llamada de texto y otra de visión (un cuadro del video de ejemplo). Muestra la respuesta y los tokens, nunca la clave; `--reasoning` muestra también el razonamiento del modelo:
+
+```
+uv run python scripts/check_provider.py
+```
+
 ## Estructura
 
 ```
@@ -66,7 +72,7 @@ legacy-demo/   app antigua de ejemplo (Flask + SQLite + 98.css)
 rewind/        pipeline de agentes en Python
 docs/          arquitectura y guía de grabación
 samples/       videos de entrada
-scripts/       grabación automática del video de demo (Playwright)
+scripts/       grabación automática del video de demo y prueba del proveedor
 ```
 
 ## Autor

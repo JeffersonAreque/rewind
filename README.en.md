@@ -58,6 +58,12 @@ uv run python -m rewind config
 
 To switch providers, set `REWIND_PROVIDER` in `.env` to `fireworks` or `baseten`.
 
+Test the provider with one text call and one vision call (a frame of the sample video). It prints the answer and token counts, never the key; `--reasoning` also prints the model's reasoning:
+
+```
+uv run python scripts/check_provider.py
+```
+
 ## Layout
 
 ```
@@ -65,7 +71,7 @@ legacy-demo/   sample legacy app (Flask + SQLite + 98.css)
 rewind/        Python agent pipeline
 docs/          architecture and recording guide
 samples/       input videos
-scripts/       automated demo video recording (Playwright)
+scripts/       demo video recording and provider smoke test
 ```
 
 ## Author
