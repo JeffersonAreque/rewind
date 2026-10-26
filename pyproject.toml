@@ -1,0 +1,15 @@
+[project]
+name = "rewind"
+version = "0.1.0"
+description = "Modernize legacy software from a screen recording, no source code needed."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Jefferson Areque" }]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "flask>=3.1",
+    "python-dotenv>=1.1",
+]
+
+[tool.uv]
+package = false
