@@ -167,7 +167,7 @@ fieldset.grow > .sunken-panel {
 }
 
 /* 98.css greys out readonly fields and the label after them; keep both legible. */
-.form-grid .readonly, .form-grid label {
+.form-grid .readonly, .form-grid input[readonly] + label {
   color: #000;
 }
 
