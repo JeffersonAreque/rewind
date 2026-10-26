@@ -65,6 +65,7 @@ legacy-demo/   sample legacy app (Flask + SQLite + 98.css)
 rewind/        Python agent pipeline
 docs/          architecture and recording guide
 samples/       input videos
+scripts/       automated demo video recording (Playwright)
 ```
 
 ## Author
