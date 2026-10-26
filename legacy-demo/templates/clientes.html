@@ -1,0 +1,54 @@
+{% extends "app.html" %}
+{% block body %}
+<form method="post" action="{{ url_for('clientes') }}" autocomplete="off">
+  <div class="form-row">
+    <fieldset>
+      <legend>DATOS DEL CLIENTE</legend>
+      <div class="form-grid">
+        <label for="documento">RUC / DNI:</label>
+        <input type="text" id="documento" name="documento" value="{{ form.documento }}" maxlength="11" autofocus>
+        <label for="razon_social">RAZON SOCIAL:</label>
+        <input type="text" id="razon_social" name="razon_social" value="{{ form.razon_social }}" maxlength="60">
+        <label for="direccion">DIRECCION:</label>
+        <input type="text" id="direccion" name="direccion" value="{{ form.direccion }}" maxlength="80">
+        <label for="telefono">TELEFONO:</label>
+        <input type="text" id="telefono" name="telefono" value="{{ form.telefono }}" maxlength="15">
+        <label for="correo">CORREO:</label>
+        <input type="text" id="correo" name="correo" value="{{ form.correo }}" maxlength="50">
+      </div>
+    </fieldset>
+    <div class="buttons">
+      <button type="submit" accesskey="g"><u>G</u>RABAR</button>
+      <button type="button" accesskey="l" data-cancel onclick="location.href='{{ url_for('clientes') }}'"><u>L</u>IMPIAR</button>
+    </div>
+  </div>
+</form>
+
+<fieldset class="grow">
+  <legend>CLIENTES REGISTRADOS</legend>
+  <div class="sunken-panel">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>CODIGO</th>
+          <th>RUC / DNI</th>
+          <th>RAZON SOCIAL</th>
+          <th>DIRECCION</th>
+          <th>TELEFONO</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in lista %}
+        <tr>
+          <td>C{{ '%04d' % c.id }}</td>
+          <td>{{ c.documento }}</td>
+          <td>{{ c.razon_social }}</td>
+          <td>{{ c.direccion }}</td>
+          <td>{{ c.telefono }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</fieldset>
+{% endblock %}

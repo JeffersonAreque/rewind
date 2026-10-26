@@ -28,7 +28,14 @@ POST_DELAY_SECONDS = 0.35
 ERRORS = {
     "bad_login": (0x0013, "USUARIO O CLAVE INCORRECTOS"),
     "required": (0x0042, "CAMPO OBLIGATORIO"),
+    "bad_document": (0x0071, "RUC/DNI INVALIDO"),
+    "bad_email": (0x0075, "CORREO INVALIDO"),
+    "duplicate_client": (0x0088, "CLIENTE YA REGISTRADO"),
 }
+
+CLIENTE_FIELDS = ("documento", "razon_social", "direccion", "telefono", "correo")
+CLIENTE_REQUIRED = {"documento": "RUC / DNI", "razon_social": "RAZON SOCIAL", "direccion": "DIRECCION"}
+RUC_PREFIXES = ("10", "15", "17", "20")
 
 # The old codepage had no accented vowels.
 NO_ACCENTS = str.maketrans("ÁÉÍÓÚÜ", "AEIOUU")
@@ -119,10 +126,41 @@ def acerca():
     return redirect(request.referrer or url_for("clientes"))
 
 
-@app.route("/clientes")
+def validate_cliente(form: dict, conn) -> dict | None:
+    for field, label in CLIENTE_REQUIRED.items():
+        if not form[field]:
+            return error("required", field, label)
+    documento = form["documento"]
+    is_dni = len(documento) == 8
+    is_ruc = len(documento) == 11 and documento.startswith(RUC_PREFIXES)
+    if not documento.isdigit() or not (is_dni or is_ruc):
+        return error("bad_document", "documento", "DNI: 8 DIGITOS / RUC: 11 DIGITOS")
+    if form["correo"] and "@" not in form["correo"]:
+        return error("bad_email", "correo")
+    if conn.execute("SELECT 1 FROM clientes WHERE documento = ?", (documento,)).fetchone():
+        return error("duplicate_client", "documento", documento)
+    return None
+
+
+@app.route("/clientes", methods=["GET", "POST"])
 @login_required
 def clientes():
-    return screen("app.html", "REGISTRO DE CLIENTES")
+    form = {field: legacy_text(request.form.get(field)) for field in CLIENTE_FIELDS}
+    dialog = None
+    with db.transaction() as conn:
+        if request.method == "POST":
+            dialog = validate_cliente(form, conn)
+            if dialog is None:
+                conn.execute(
+                    "INSERT INTO clientes (documento, razon_social, direccion, telefono, correo) VALUES (?, ?, ?, ?, ?)",
+                    tuple(form[field] for field in CLIENTE_FIELDS),
+                )
+                flash("OPERACION COMPLETADA SATISFACTORIAMENTE.")
+                return redirect(url_for("clientes"))
+        lista = conn.execute("SELECT * FROM clientes ORDER BY id DESC").fetchall()
+    return screen(
+        "clientes.html", "REGISTRO DE CLIENTES", dialog, status=f"{len(lista)} REGISTROS", form=form, lista=lista
+    )
 
 
 @app.route("/facturas")

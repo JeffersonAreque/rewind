@@ -131,6 +131,19 @@ fieldset {
   margin: 0;
 }
 
+/* A group box that takes the rest of the window, with a scrolling grid inside. */
+fieldset.grow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+fieldset.grow > .sunken-panel {
+  flex: 1;
+  min-height: 0;
+}
+
 .form-row {
   display: flex;
   gap: 12px;
