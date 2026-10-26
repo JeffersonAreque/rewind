@@ -12,6 +12,7 @@ import os
 import secrets
 import time
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from flask import Flask, flash, get_flashed_messages, redirect, render_template, request, session, url_for
@@ -32,10 +33,15 @@ ERRORS = {
     "bad_email": (0x0075, "CORREO INVALIDO"),
     "bad_date": (0x0057, "FECHA INVALIDA"),
     "duplicate_client": (0x0088, "CLIENTE YA REGISTRADO"),
+    "bad_amount": (0x00A1, "MONTO INVALIDO"),
+    "over_balance": (0x00A4, "MONTO EXCEDE SALDO PENDIENTE"),
+    "already_paid": (0x00A9, "FACTURA YA CANCELADA"),
     "no_records": (0x00B2, "NO SE ENCONTRARON REGISTROS"),
+    "no_invoice": (0x00B7, "FACTURA NO EXISTE"),
 }
 
 ESTADOS = ("", "PENDIENTE", "PARCIAL", "PAGADA")
+METODOS = ("EFECTIVO", "TRANSFERENCIA", "CHEQUE")
 
 CLIENTE_FIELDS = ("documento", "razon_social", "direccion", "telefono", "correo")
 CLIENTE_REQUIRED = {"documento": "RUC / DNI", "razon_social": "RAZON SOCIAL", "direccion": "DIRECCION"}
@@ -56,6 +62,17 @@ def parse_date(value: str) -> str | None:
         return datetime.strptime(value, "%d/%m/%Y").date().isoformat()
     except ValueError:
         return None
+
+
+def parse_cents(value: str) -> int | None:
+    """'1,250.50' or 'S/ 1250.5' -> 125050, or None if it is not a positive amount."""
+    try:
+        amount = Decimal(value.replace("S/", "").replace(",", "").strip())
+    except InvalidOperation:
+        return None
+    if not amount.is_finite() or amount <= 0 or amount.as_tuple().exponent < -2:
+        return None
+    return int(amount * 100)
 
 
 @app.template_filter("dmy")
@@ -234,10 +251,62 @@ def facturas():
     )
 
 
-@app.route("/pagos")
+def validate_pago(form: dict, factura) -> tuple[dict, None] | tuple[None, dict]:
+    """Returns (payment row, None) when valid, or (None, error dialog)."""
+    if factura is None:
+        return None, error("no_invoice", "numero")
+    if factura["estado"] == "PAGADA":
+        return None, error("already_paid", "numero", factura["numero"])
+    if not form["monto"]:
+        return None, error("required", "monto", "MONTO")
+    monto = parse_cents(form["monto"])
+    if monto is None:
+        return None, error("bad_amount", "monto")
+    if monto > factura["saldo"]:
+        return None, error("over_balance", "monto", f"SALDO: {soles(factura['saldo'])}")
+    if not form["fecha"]:
+        return None, error("required", "fecha", "FECHA PAGO")
+    fecha = parse_date(form["fecha"])
+    if fecha is None:
+        return None, error("bad_date", "fecha", "FORMATO: DD/MM/AAAA")
+    if form["metodo"] not in METODOS:
+        return None, error("required", "metodo", "METODO")
+    if form["metodo"] != "EFECTIVO" and not form["operacion"]:
+        return None, error("required", "operacion", "NRO. OPERACION")
+    pago = {"factura_id": factura["id"], "fecha": fecha, "monto": monto, "metodo": form["metodo"], "operacion": form["operacion"]}
+    return pago, None
+
+
+@app.route("/pagos", methods=["GET", "POST"])
 @login_required
 def pagos():
-    return screen("app.html", "REGISTRAR PAGO")
+    source = request.form if request.method == "POST" else request.args
+    form = {field: legacy_text(source.get(field)) for field in ("numero", "monto", "fecha", "metodo", "operacion")}
+    form["fecha"] = form["fecha"] or date.today().strftime("%d/%m/%Y")
+    form["metodo"] = form["metodo"] or METODOS[0]
+    factura_id = source.get("factura", "")
+    factura, dialog = None, None
+
+    with db.transaction() as conn:
+        if factura_id:
+            factura = conn.execute("SELECT * FROM facturas_saldo WHERE id = ?", (factura_id,)).fetchone()
+        elif form["numero"]:
+            factura = conn.execute("SELECT * FROM facturas_saldo WHERE numero = ?", (form["numero"],)).fetchone()
+            if factura is None:
+                dialog = error("no_invoice", "numero", form["numero"])
+
+        if request.method == "POST":
+            pago, dialog = validate_pago(form, factura)
+            if pago is not None:
+                conn.execute(
+                    "INSERT INTO pagos (factura_id, fecha, monto, metodo, operacion) "
+                    "VALUES (:factura_id, :fecha, :monto, :metodo, :operacion)",
+                    pago,
+                )
+                flash("OPERACION COMPLETADA SATISFACTORIAMENTE.")
+                return redirect(url_for("facturas", buscar=1, numero=factura["numero"], sel=factura["id"]))
+
+    return screen("pago.html", "REGISTRAR PAGO", dialog, form=form, factura=factura, metodos=METODOS)
 
 
 def main() -> None:

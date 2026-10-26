@@ -1,0 +1,55 @@
+{% extends "app.html" %}
+{% block body %}
+<form method="get" action="{{ url_for('pagos') }}" autocomplete="off">
+  <div class="form-row">
+    <fieldset>
+      <legend>FACTURA</legend>
+      <div class="form-grid">
+        <label for="numero">NRO. FACTURA:</label>
+        <input type="text" id="numero" name="numero" value="{{ factura.numero if factura else form.numero }}" maxlength="11" {{ '' if factura else 'autofocus' }}>
+        <label>CLIENTE:</label>
+        <input type="text" class="readonly" value="{{ factura.razon_social if factura }}" readonly tabindex="-1">
+        <label>FECHA EMISION:</label>
+        <input type="text" class="readonly date" value="{{ factura.fecha|dmy if factura }}" readonly tabindex="-1">
+        <label>TOTAL:</label>
+        <input type="text" class="readonly amount" value="{{ factura.total|soles if factura }}" readonly tabindex="-1">
+        <label>SALDO PENDIENTE:</label>
+        <input type="text" class="readonly amount" value="{{ factura.saldo|soles if factura }}" readonly tabindex="-1">
+        <label>ESTADO:</label>
+        <input type="text" class="readonly date" value="{{ factura.estado if factura }}" readonly tabindex="-1">
+      </div>
+    </fieldset>
+    <div class="buttons">
+      <button type="submit" accesskey="b"><u>B</u>USCAR</button>
+    </div>
+  </div>
+</form>
+
+<form method="post" action="{{ url_for('pagos') }}" autocomplete="off">
+  <input type="hidden" name="factura" value="{{ factura.id if factura }}">
+  <div class="form-row">
+    <fieldset>
+      <legend>DATOS DEL PAGO</legend>
+      <div class="form-grid">
+        <label for="monto">MONTO S/:</label>
+        <input type="text" id="monto" name="monto" value="{{ form.monto }}" class="amount" maxlength="12" {{ 'autofocus' if factura }}>
+        <label for="fecha">FECHA PAGO:</label>
+        <input type="text" id="fecha" name="fecha" value="{{ form.fecha }}" class="date" maxlength="10" placeholder="DD/MM/AAAA">
+        <label>METODO:</label>
+        <div class="radios">
+          {% for m in metodos %}
+          <input type="radio" id="metodo-{{ loop.index }}" name="metodo" value="{{ m }}" {{ 'checked' if form.metodo == m }}>
+          <label for="metodo-{{ loop.index }}">{{ m }}</label>
+          {% endfor %}
+        </div>
+        <label for="operacion">NRO. OPERACION:</label>
+        <input type="text" id="operacion" name="operacion" value="{{ form.operacion }}" maxlength="20">
+      </div>
+    </fieldset>
+    <div class="buttons">
+      <button type="submit" accesskey="g" {{ '' if factura else 'disabled' }}><u>G</u>RABAR</button>
+      <button type="button" data-cancel onclick="location.href='{{ url_for('facturas') }}'">CANCELAR</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

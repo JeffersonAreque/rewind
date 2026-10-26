@@ -166,8 +166,22 @@ fieldset.grow > .sunken-panel {
   box-sizing: border-box;
 }
 
+/* 98.css greys out readonly fields and the label after them; keep both legible. */
+.form-grid .readonly, .form-grid label {
+  color: #000;
+}
+
 .form-grid .readonly {
   background: silver;
+}
+
+.form-grid .radios {
+  display: flex;
+  gap: 4px 14px;
+}
+
+.form-grid .radios label {
+  text-align: left;
 }
 
 .buttons {
