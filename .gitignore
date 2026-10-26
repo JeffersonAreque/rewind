@@ -30,7 +30,8 @@ node_modules/
 dist/
 build/
 
-# Editors / OS
+# Editors / OS / local tool settings
+.claude/settings.local.json
 .vscode/
 .idea/
 .DS_Store
