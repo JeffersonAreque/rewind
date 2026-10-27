@@ -6,7 +6,9 @@
 
 Modernize legacy software from a screen recording, with no source code. Record someone using the old program; a team of agents rebuilds its screens and workflows as a modern web app, then checks step by step that it behaves the same.
 
-![Sample billing system with a Windows 98 look](docs/img/legacy-demo.png)
+| Before: the legacy program (seen only on video) | After: the app Rewind generated |
+|---|---|
+| ![Sample billing system with a Windows 98 look](docs/img/legacy-demo.png) | ![Generated modern app: invoices with the payment in a side panel](docs/img/modern-app.png) |
 
 ## How it works
 
@@ -27,7 +29,8 @@ More detail in [docs/arquitectura.md](docs/arquitectura.md) (Spanish).
 | Provider config (Baseten / Fireworks) | Done |
 | Agent 1: screens | Done: 100% accuracy on the sample video |
 | Agent 2: flows | Done: 29/29 steps, 11/11 values, 4/4 workflows and 7/7 rules on the sample video |
-| Agents 3 and 4 | In progress |
+| Agent 3: builder | Done: modern app with 8 justified changes; 4/4 workflows replayed successfully |
+| Agent 4: verifier | In progress |
 
 ## Stack
 
@@ -82,6 +85,13 @@ uv run python -m rewind flows runs/<id>
 uv run python scripts/eval_flows.py       # % of steps, values, workflows and rules
 ```
 
+Agent 3, builder. Generates the modern app in `runs/<id>/app/` and replays the recorded workflows on it. Muse Spark only fills a validated JSON spec; the app's code is fixed and tested. `CHANGES.md` shows every modernization change next to the legacy program, with its reason and the steps that justify it:
+
+```
+uv run python -m rewind build runs/<id>
+uv run python runs/<id>/app/app.py        # http://127.0.0.1:5001 (user ADMIN; the password is printed on first start)
+```
+
 Tests that make no model calls:
 
 ```
@@ -94,7 +104,7 @@ uv run pytest
 legacy-demo/   sample legacy app (Flask + SQLite + 98.css)
 rewind/        Python agent pipeline
 docs/          architecture and recording guide
-samples/       input video and expected answers
+samples/       input video, expected answers and a sample spec
 scripts/       video recording, provider smoke test and accuracy check
 tests/         tests that need no API
 ```

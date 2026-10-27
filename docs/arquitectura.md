@@ -12,7 +12,7 @@ video.mp4
 2. Agente de flujos ─────► pasos del usuario, flujos de negocio y reglas de negocio
    │
    ▼
-3. Agente constructor ───► app web moderna
+3. Agente constructor ───► app web moderna + una prueba por flujo
    │
    ▼
 4. Agente verificador ───► informe: cada paso del flujo, app nueva vs. video original
@@ -22,7 +22,7 @@ video.mp4
 |---|---|---|---|---|
 | Pantallas (`rewind/agents/screens.py`) | Video MP4 | `screens.json` + cuadros clave en PNG | Muse Spark Open (SAM 3.1 opcional) | Listo |
 | Flujos (`rewind/agents/flows.py`) | Corrida del agente de pantallas | `flows.json`: pasos, flujos y reglas | Muse Spark Open | Listo |
-| Constructor (`rewind/agents/builder.py`) | Pantallas y flujos | App web | Muse Spark Open | Planificado |
+| Constructor (`rewind/agents/builder.py`) | `screens.json` y `flows.json` | `app/`: app web moderna + pruebas por flujo | Muse Spark Open | Listo |
 | Verificador (`rewind/agents/verifier.py`) | App nueva, flujos y video | Comparación visual paso por paso | Muse Spark Open | Planificado |
 
 ## Modelos
@@ -139,6 +139,51 @@ uv run python scripts/eval_flows.py              # evalúa la última corrida
 - **Reglas:** se buscan por patrones.
 
 Resultado actual: **pasos 29/29, valores 11/11, flujos 4/4, reglas 7/7**. Costó unos 104 mil tokens (17 llamadas); repetir la corrida cuesta 0 tokens.
+
+## Agente 3: constructor
+
+```
+uv run python -m rewind build runs/<id>
+uv run python runs/<id>/app/app.py        # http://127.0.0.1:5001
+```
+
+**El modelo nunca escribe código.** La app se arma con dos piezas:
+- un **runtime** fijo que escribimos y probamos una vez (`rewind/builder/runtime/`: Flask + SQLite, interfaz moderna);
+- un **spec** en JSON que llena Muse Spark Open y que validan pydantic y los chequeos de `rewind/builder/spec.py`.
+
+Si un chequeo falla, el error vuelve al modelo y la llamada se reintenta. Una respuesta guardada en caché se vuelve a revisar con los chequeos actuales.
+
+1. **Datos iniciales.** Muse Spark copia las filas de cada tabla del primer cuadro donde aparece con datos: los 6 clientes y las 3 facturas de TAMBOPATA. Ese es el estado antes de que el usuario cambie algo. El número de filas debe coincidir con el que vio el agente 1, y no se inventan registros que no salen en el video.
+2. **Modelo de datos.** Define las entidades (cliente, factura, pago) con campos tipados. Un código `serial` (como C0006) solo vale si los códigos vistos son 1, 2, 3… seguidos; los números de factura (F001-000110) quedan como texto.
+3. **Modernización.** El modelo propone cambios de una lista fija, cada uno con su motivo y los pasos del video que lo justifican:
+   - unir la búsqueda y el pago en una sola página;
+   - errores junto al campo en vez de un diálogo;
+   - un aviso que se cierra solo en vez de un ACEPTAR;
+   - etiquetas más claras, valores por defecto, otro orden de campos;
+   - quitar menús que ningún paso usa.
+
+   Los chequeos exigen que cada cambio se aplique de verdad y que ningún elemento usado por un paso desaparezca.
+4. **Una pantalla por llamada.** Cada pantalla antigua se describe en uno de 4 tipos que el runtime entiende (`login`, `create`, `search`, `transaction`):
+   - con la etiqueta moderna y la antigua de cada elemento (`data-legacy`);
+   - con las validaciones con su código original (`0x0042`);
+   - con efectos escritos como expresiones seguras (`invoice.balance - payment.amount`), que se leen con `ast` contra una lista blanca, nunca con `eval`.
+5. **Pruebas.** El código, no el modelo, escribe una prueba Playwright por flujo a partir de `flows.json`:
+   - repite los 29 pasos buscando cada elemento por su etiqueta antigua;
+   - convierte las observaciones en comprobaciones: 6 → 7 clientes, 3 resultados, REGISTRAR PAGO habilitado solo al elegir una fila, PARCIAL y S/ 340.00.
+
+   Los clics que un cambio vuelve innecesarios (el ACEPTAR de un mensaje que ya no es diálogo) se marcan como "absorbidos" con el cambio que los explica; nunca se ocultan.
+
+`runs/<id>/app/` contiene:
+- `app.py` (el runtime), `spec.json`, `seed.json` y `tests/`;
+- `CHANGES.md`: tabla antiguo / modernizado / motivo / pasos, escrita a partir de lo que se construyó y no del texto del modelo;
+- `build.json`: el resultado.
+
+Resultado en el video de ejemplo:
+- **4/4 flujos pasan**, con 29 pasos, 3 de ellos absorbidos por los cambios.
+- **36 de 36 elementos antiguos** se conservan.
+- **8 cambios de modernización.**
+- **Prueba de que las pruebas miden algo:** si se quita la fórmula del saldo, la prueba del pago falla en el paso 28 ("no muestra S/ 340.00"); si se quita el campo obligatorio, falla la del cliente.
+- **Costo:** unos 105 mil tokens (10 llamadas); repetir cuesta 0.
 
 ## Proveedor de modelos
 

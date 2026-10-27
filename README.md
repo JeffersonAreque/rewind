@@ -7,7 +7,9 @@
 
 Moderniza software antiguo a partir de un video, sin el código fuente. Grabas a alguien usando el programa viejo y un equipo de agentes reconstruye sus pantallas y flujos en una app web moderna, y luego verifica paso a paso que hace lo mismo.
 
-![Sistema de facturación de ejemplo con estética de Windows 98](docs/img/legacy-demo.png)
+| Antes: el programa antiguo (solo se ve en video) | Después: la app que generó Rewind |
+|---|---|
+| ![Sistema de facturación de ejemplo con estética de Windows 98](docs/img/legacy-demo.png) | ![App moderna generada: facturas con el pago en un panel lateral](docs/img/modern-app.png) |
 
 ## Cómo funciona
 
@@ -28,7 +30,8 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 | Configuración de proveedor (Baseten / Fireworks) | Lista |
 | Agente 1: pantallas | Listo: 100 % de acierto en el video de ejemplo |
 | Agente 2: flujos | Listo: 29/29 pasos, 11/11 valores, 4/4 flujos y 7/7 reglas en el video de ejemplo |
-| Agentes 3 y 4 | En desarrollo |
+| Agente 3: constructor | Listo: app moderna con 8 cambios justificados; 4/4 flujos repetidos con éxito |
+| Agente 4: verificador | En desarrollo |
 
 ## Tecnologías
 
@@ -83,6 +86,13 @@ uv run python -m rewind flows runs/<id>
 uv run python scripts/eval_flows.py       # % de pasos, valores, flujos y reglas
 ```
 
+Agente 3, constructor. Genera la app moderna en `runs/<id>/app/` y repite en ella los flujos grabados. Muse Spark solo llena un spec en JSON validado; el código de la app es fijo y probado. `CHANGES.md` muestra cada cambio de modernización frente al programa antiguo, con su motivo y los pasos que lo justifican:
+
+```
+uv run python -m rewind build runs/<id>
+uv run python runs/<id>/app/app.py        # http://127.0.0.1:5001 (usuario ADMIN; la clave se muestra al primer inicio)
+```
+
 Pruebas sin llamadas al modelo:
 
 ```
@@ -95,7 +105,7 @@ uv run pytest
 legacy-demo/   app antigua de ejemplo (Flask + SQLite + 98.css)
 rewind/        pipeline de agentes en Python
 docs/          arquitectura y guía de grabación
-samples/       video de entrada y respuestas esperadas
+samples/       video de entrada, respuestas esperadas y un spec de ejemplo
 scripts/       grabación del video, prueba del proveedor y prueba de precisión
 tests/         pruebas sin API
 ```
