@@ -230,3 +230,101 @@ def build_steps(frames: list[dict], pairs: list[dict]) -> list[Step]:
     for n, step in enumerate(steps, 1):
         step.n = n
     return steps
+
+
+# ---------- Cross-checking values ----------
+
+
+def field_readings(step: Step, frames: list[dict]) -> list[dict]:
+    """How Agent 1 read the step's field in the frames after it was filled.
+
+    Same screen: every frame until the field is emptied or changed. Other
+    screens: only frames that show a similar value (e.g. the customer chosen
+    in the search shown again on the payment screen).
+    """
+    label, reference = normalize(step.target), step.value
+    readings = []
+    for frame in frames:
+        if frame["index"] <= step.frame_from:
+            continue
+        a = frame["analysis"]
+        same_screen = normalize(a.screen_name) == normalize(step.screen)
+        for field in (f for s in a.sections for f in s.fields if normalize(f.label) == label):
+            if same_screen and (not field.value or (reference and not similar(field.value, reference))):
+                return readings  # cleared or changed by the user: later frames say nothing about this step
+            if same_screen or (reference and field.value and similar(field.value, reference)):
+                readings.append({"source": f"frame {frame['index']}", "value": field.value, "time": frame["time"]})
+                reference = reference or field.value
+            break
+    return readings
+
+
+def text_readings(step: Step, frames: list[dict], pairs: list[dict]) -> list[dict]:
+    """Later texts that show the value: a status bar 'LABEL: VALUE' (which can
+    reveal a value never seen typed) or a status bar / observation containing it."""
+    label = re.compile(rf"^\s*{re.escape(normalize(step.target))}\s+(.+?)\s*$")
+    texts: dict[str, tuple[str, float]] = {}  # each distinct text counts once
+    for frame in frames:
+        if frame["index"] > step.frame_from:
+            for line in frame["analysis"].status_bar:
+                texts.setdefault(line, (f"status bar frame {frame['index']}", frame["time"]))
+    for pair in pairs:
+        if pair["to"] > step.frame_from and "analysis" in pair:
+            for obs in pair["analysis"].observations:
+                texts.setdefault(obs.after, (f"observation {pair['from']}->{pair['to']}", pair["time_to"]))
+
+    readings = []
+    for text, (source, time) in texts.items():
+        # A status bar copied into one text joins its panels with "|".
+        labelled = [m.group(1) for part in text.split("|") if (m := label.match(normalize(part)))]
+        if labelled:
+            readings.append({"source": source, "value": labelled[0], "time": time})
+        elif step.value and normalize(step.value) in normalize(text):
+            readings.append({"source": source, "value": step.value, "time": time})
+    return readings
+
+
+def is_password(step: Step, frames: list[dict]) -> bool:
+    return any(
+        f.type == "password"
+        for frame in frames if normalize(frame["analysis"].screen_name) == normalize(step.screen)
+        for s in frame["analysis"].sections for f in s.fields if normalize(f.label) == normalize(step.target)
+    )
+
+
+def decide(step: Step, readings: list[dict]) -> None:
+    """Pick the value most readings agree on and say how sure we are.
+
+    high: two or more readings, all equal. medium: a single reading, or a clear
+    majority (at least twice all the others). low: no clear majority. The
+    readings that disagree are kept in `variants`; nothing is made up.
+    """
+    groups: dict[str, list[dict]] = {}
+    for reading in sorted(readings, key=lambda r: r.get("time", 0)):
+        groups.setdefault(normalize(reading["value"]), []).append(reading)
+    if not groups:
+        return
+    # Most readings wins; on a tie the latest reading (the value was more complete or less covered).
+    winner = max(groups.values(), key=lambda g: (len(g), g[-1].get("time", 0)))
+    others = sum(len(g) for g in groups.values() if g is not winner)
+    step.value = winner[-1]["value"]
+    step.variants = [g[-1]["value"] for g in groups.values() if g is not winner]
+    if others == 0:
+        step.confidence = "high" if len(winner) >= 2 else "medium"
+    else:
+        step.confidence = "medium" if len(winner) >= 2 * others else "low"
+
+
+def cross_check(steps: list[Step], frames: list[dict], pairs: list[dict]) -> None:
+    """Set value, confidence and variants of every type/select step, in place."""
+    time_of = {f"pair {p['from']}->{p['to']}": p["time_to"] for p in pairs}
+    for step in steps:
+        if step.action not in ("type", "select"):
+            continue
+        step.readings = [r | {"time": r.get("time", time_of.get(r["source"], 0))} for r in step.readings]
+        step.readings += field_readings(step, frames)
+        step.readings += text_readings(step, frames, pairs)
+        if step.readings:
+            decide(step, step.readings)
+        elif is_password(step, frames):
+            step.value, step.confidence = None, "masked"

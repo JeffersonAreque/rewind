@@ -1,4 +1,12 @@
-from rewind.agents.flows import Action, PairAnalysis, analyze_pair, build_steps, describe
+from rewind.agents.flows import (
+    Action,
+    Observation,
+    PairAnalysis,
+    analyze_pair,
+    build_steps,
+    cross_check,
+    describe,
+)
 from rewind.agents.screens import Button, Dialog, FrameAnalysis, Section, UIField
 from tests.fakes import FakeClient
 
@@ -92,3 +100,82 @@ def test_new_value_after_a_click_is_a_new_step():
         pair(1, 2, pick | {"value": "A S.A.C."}),
     ]
     assert [s.action for s in build_steps(frames, pairs)] == ["open_screen", "select", "click", "select"]
+
+
+def checked(frames, pairs):
+    steps = build_steps(frames, pairs)
+    cross_check(steps, frames, pairs)
+    return {s.target: s for s in steps}
+
+
+TYPE_RUC = {"action": "type", "target": "RUC", "element": "field"}
+
+
+def test_value_seen_again_is_high():
+    frames = [make_frame(0, 0.0, "CLIENTES", {"RUC": ""})] + [
+        make_frame(i, float(i), "CLIENTES", {"RUC": "20612345678"}) for i in (1, 2)
+    ]
+    pairs = [pair(0, 1, TYPE_RUC | {"value": "20612345678"}), pair(1, 2)]
+    step = checked(frames, pairs)["RUC"]
+    assert (step.value, step.confidence, step.variants) == ("20612345678", "high", [])
+
+
+def test_single_reading_is_medium():
+    frames = [make_frame(0, 0.0, "CLIENTES"), make_frame(1, 1.0, "CLIENTES")]
+    step = checked(frames, [pair(0, 1, TYPE_RUC | {"value": "123"})])["RUC"]
+    assert step.confidence == "medium"
+
+
+def test_clear_majority_wins_and_keeps_the_variant():
+    pick = {"action": "select", "target": "CLIENTE", "element": "list", "value": "TAMBOPATA S.A.C."}
+    frames = [make_frame(0, 0.0, "FACTURAS", {"CLIENTE": "(TODOS)"})]
+    frames += [make_frame(i, float(i), "FACTURAS", {"CLIENTE": "TAMBOPATA S.A.C."}) for i in (1, 2)]
+    frames += [make_frame(3, 3.0, "PAGO", {"CLIENTE": "TAMBOPATAS S.A.C."})]
+    pairs = [pair(0, 1, pick), pair(1, 2), pair(2, 3)]
+    step = checked(frames, pairs)["CLIENTE"]
+    assert (step.value, step.confidence, step.variants) == ("TAMBOPATA S.A.C.", "medium", ["TAMBOPATAS S.A.C."])
+
+
+def test_disagreement_without_majority_is_low():
+    frames = [make_frame(0, 0.0, "CLIENTES", {"RAZON SOCIAL": ""}),
+              make_frame(1, 1.0, "CLIENTES", {"RAZON SOCIAL": "CASTANAL R.A.C.I"}),
+              make_frame(2, 2.0, "CLIENTES", {"RAZON SOCIAL": "CASTANAL S.A.C."})]
+    typed = {"action": "type", "target": "RAZON SOCIAL", "element": "field"}
+    pairs = [pair(0, 1, typed | {"value": "CASTANAL R.A.C.I"}), pair(1, 2, typed | {"value": "CASTANAL S.A.C."})]
+    step = checked(frames, pairs)["RAZON SOCIAL"]
+    # 2 against 2: the latest reading wins, but it is flagged.
+    assert (step.value, step.confidence, step.variants) == ("CASTANAL S.A.C.", "low", ["CASTANAL R.A.C.I"])
+
+
+def test_cleared_field_stops_the_readings():
+    frames = [make_frame(0, 0.0, "CLIENTES", {"RUC": ""}),
+              make_frame(1, 1.0, "CLIENTES", {"RUC": "123"}),
+              make_frame(2, 2.0, "CLIENTES", {"RUC": ""}),
+              make_frame(3, 3.0, "CLIENTES", {"RUC": "999"})]
+    pairs = [pair(0, 1, TYPE_RUC | {"value": "123"}), pair(1, 2), pair(2, 3)]
+    step = checked(frames, pairs)["RUC"]
+    assert [r["source"] for r in step.readings] == ["pair 0->1", "frame 1"]
+
+
+def test_hidden_value_recovered_from_status_bar():
+    frames = [make_frame(0, 0.0, "LOGIN"), make_frame(1, 1.0, "MENU", status=["USUARIO: ADMIN", "26/10/2026"])]
+    typed = {"action": "type", "target": "USUARIO", "element": "field", "value_visible": False}
+    step = checked(frames, [pair(0, 1, typed)])["USUARIO"]
+    assert (step.value, step.confidence) == ("ADMIN", "medium")
+    assert step.readings[0]["source"] == "status bar frame 1"
+
+
+def test_observation_confirms_a_value():
+    frames = [make_frame(0, 0.0, "CLIENTES"), make_frame(1, 1.0, "CLIENTES")]
+    p = pair(0, 1, TYPE_RUC | {"value": "20612345678"})
+    p["analysis"].observations = [Observation(subject="row C0007", before="", after="C0007 | 20612345678 | FERRETERIA")]
+    step = checked(frames, [p])["RUC"]
+    assert step.confidence == "high"
+
+
+def test_password_is_masked():
+    login = make_frame(0, 0.0, "LOGIN")
+    login["analysis"].sections[0].fields = [UIField(label="CLAVE", type="password", editable=True)]
+    typed = {"action": "type", "target": "CLAVE", "element": "field", "value_visible": False}
+    step = checked([login, make_frame(1, 1.0, "MENU")], [pair(0, 1, typed)])["CLAVE"]
+    assert (step.value, step.confidence) == (None, "masked")
