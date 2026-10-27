@@ -78,6 +78,35 @@ def cmd_flows(args: argparse.Namespace) -> int:
     return 1 if report["failed_pairs"] else 0
 
 
+def cmd_build(args: argparse.Namespace) -> int:
+    from rewind.agents import builder
+
+    for name in ("screens.json", "flows.json"):
+        if not (args.run / name).is_file():
+            raise ValueError(f"{args.run} has no {name}; run the screens and flows commands first")
+    app_dir = builder.run(args.run, args.provider, not args.no_test, args.workers)
+
+    report = json.loads((app_dir / "build.json").read_text(encoding="utf-8"))
+    print(f"\nLegacy elements kept:")
+    for screen, c in report["coverage"].items():
+        print(f"  {screen:<28} {c['kept']}/{c['legacy']} kept, {c['removed']} removed on purpose")
+    print(f"Modernization changes: {report['changes']} (see {app_dir / 'CHANGES.md'})")
+    for problem in report["unclaimed_rules"]:
+        print(f"  note: {problem}; the replay tests still check it")
+    absorbed = report["absorbed_steps"]
+    if report["tests"]:
+        passed = [t for t in report["tests"] if t["passed"]]
+        print(f"Workflow replay: {len(passed)}/{len(report['tests'])} workflows passed "
+              f"({report['steps']} recorded steps, {len(absorbed)} absorbed by changes: {absorbed})")
+        for t in report["tests"]:
+            print(f"  [{'ok' if t['passed'] else '--'}] {t['name']}" + (f": {t['error']}" if t["error"] else ""))
+    tokens = report["tokens"]
+    print(f"Tokens this run: {tokens['total']} ({tokens['reasoning']} reasoning, {tokens['calls']} calls); "
+          f"{report['cached_calls']} calls from cache")
+    print(f"\nRun the new app:  uv run python {app_dir / 'app.py'}")
+    return 0 if all(t["passed"] for t in report["tests"]) else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="rewind", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -103,6 +132,13 @@ def main() -> int:
     flows.add_argument("--provider", choices=PROVIDERS, help="override REWIND_PROVIDER")
     flows.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
     flows.set_defaults(func=cmd_flows)
+
+    build = commands.add_parser("build", help="builder agent: generate the modern app and replay the workflows")
+    build.add_argument("run", type=Path, help="run folder with screens.json and flows.json (runs/<id>)")
+    build.add_argument("--provider", choices=PROVIDERS, help="override REWIND_PROVIDER")
+    build.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
+    build.add_argument("--no-test", action="store_true", help="do not run the replay tests after building")
+    build.set_defaults(func=cmd_build)
 
     args = parser.parse_args()
     try:
