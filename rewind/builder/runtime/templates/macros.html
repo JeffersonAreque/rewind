@@ -24,6 +24,7 @@
     <input id="{{ id }}" name="{{ id }}" data-legacy="{{ f.legacy }}" value="{{ value or '' }}"
       type="{{ 'password' if f.input == 'password' else 'date' if f.input == 'date' else 'text' }}"
       {% if f.input == 'money' %}inputmode="decimal" class="num"{% endif %}
+      {% if f.name == 'username' %}autocomplete="username"{% elif f.input == 'password' %}autocomplete="current-password"{% endif %}
       {% if error %}aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
     {% endif %}
   {% endif %}
