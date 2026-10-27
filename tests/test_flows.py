@@ -2,10 +2,13 @@ from rewind.agents.flows import (
     Action,
     Observation,
     PairAnalysis,
+    Synthesis,
     analyze_pair,
     build_steps,
+    check_synthesis,
     cross_check,
     describe,
+    synthesis_input,
 )
 from rewind.agents.screens import Button, Dialog, FrameAnalysis, Section, UIField
 from tests.fakes import FakeClient
@@ -179,3 +182,38 @@ def test_password_is_masked():
     typed = {"action": "type", "target": "CLAVE", "element": "field", "value_visible": False}
     step = checked([login, make_frame(1, 1.0, "MENU")], [pair(0, 1, typed)])["CLAVE"]
     assert (step.value, step.confidence) == (None, "masked")
+
+
+def three_steps():
+    frames = [make_frame(0, 0.0, "LOGIN"), make_frame(1, 1.0, "MENU")]
+    return build_steps(frames, [pair(0, 1, {"action": "click", "target": "ACEPTAR", "element": "button"})])
+
+
+def synthesis(workflows, rules=()):
+    return Synthesis.model_validate({"workflows": workflows, "rules": list(rules)})
+
+
+def test_synthesis_check_accepts_a_clean_answer():
+    answer = synthesis([{"name": "Log in", "goal": "enter", "steps": [1, 2, 3]}],
+                       [{"kind": "navigation", "screen": "LOGIN", "description": "ACEPTAR opens MENU", "evidence_steps": [2, 3]}])
+    assert check_synthesis(three_steps())(answer) is None
+
+
+def test_synthesis_check_rejects_bad_step_numbers():
+    check = check_synthesis(three_steps())
+    assert "does not exist" in check(synthesis([{"name": "A", "goal": "", "steps": [1, 2, 3, 9]}]))
+    assert "two workflows" in check(synthesis([{"name": "A", "goal": "", "steps": [1, 2]},
+                                              {"name": "B", "goal": "", "steps": [2, 3]}]))
+    assert "in no workflow" in check(synthesis([{"name": "A", "goal": "", "steps": [1, 2]}]))
+
+
+def test_synthesis_input_lists_steps_and_changes():
+    frames = [make_frame(0, 0.0, "PAGO"), make_frame(1, 1.0, "FACTURAS")]
+    p = pair(0, 1, {"action": "click", "target": "GRABAR", "element": "button"})
+    p["analysis"].observations = [Observation(subject="ESTADO", before="PENDIENTE", after="PARCIAL")]
+    screens = [{"name": "FACTURAS", "dialogs": [],
+                "buttons": [{"label": "REGISTRAR PAGO", "enabled": True, "always_enabled": False}]}]
+    text = synthesis_input(build_steps(frames, [p]), [p], screens)
+    assert "2. [PAGO] click GRABAR" in text
+    assert "ESTADO: PENDIENTE -> PARCIAL" in text
+    assert "buttons sometimes disabled: REGISTRAR PAGO" in text

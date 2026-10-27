@@ -13,7 +13,9 @@ groups the steps into workflows and infers the rules.
 
 import json
 import re
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal
@@ -22,8 +24,8 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from rewind.agents.screens import FrameAnalysis, normalize
-from rewind.config import ROOT
-from rewind.llm import TokenCount, ask_json, cache_key, cached, image_url
+from rewind.config import ROOT, load_provider
+from rewind.llm import TokenCount, ask_json, cache_key, cached, image_url, make_client
 
 CACHE_DIR = ROOT / "runs" / "cache" / "flows"
 
@@ -328,3 +330,161 @@ def cross_check(steps: list[Step], frames: list[dict], pairs: list[dict]) -> Non
             decide(step, step.readings)
         elif is_password(step, frames):
             step.value, step.confidence = None, "masked"
+
+
+# ---------- Workflows and business rules ----------
+
+
+class Workflow(BaseModel):
+    name: str = Field(description="short business name, 2 to 4 words, e.g. 'Register customer'")
+    goal: str = Field(description="what the user achieves, one sentence")
+    steps: list[int] = Field(description="numbers of the steps of this workflow")
+    screens: list[str] = Field(default_factory=list)
+
+
+class Rule(BaseModel):
+    kind: Literal["required_field", "validation", "state_change", "calculation", "enablement", "navigation", "other"]
+    screen: str
+    field: str | None = None
+    code: str | None = Field(None, description="error code shown by the app, e.g. 0x0042")
+    description: str = Field(description="the rule in one sentence, with the values seen as evidence")
+    evidence_steps: list[int] = Field(default_factory=list)
+
+
+class Synthesis(BaseModel):
+    workflows: list[Workflow]
+    rules: list[Rule]
+
+
+SYNTHESIS_PROMPT = f"""Below is what a user did in an old business application, reconstructed from a
+screen recording: the numbered steps, the data changes observed between steps, and the screens.
+
+1. Group the steps into business workflows: tasks with a business purpose (for example logging
+   in, registering a customer, searching invoices, registering a payment). Every step belongs to
+   exactly one workflow, and each workflow is a run of consecutive steps.
+2. Infer the business rules that the application shows, only from this evidence:
+   - required fields and validation errors, with their error codes;
+   - state changes of records (status before -> after);
+   - calculations, with the arithmetic using the numbers seen;
+   - buttons that are only enabled under a condition;
+   - where an action takes the user (navigation).
+   Every rule cites the steps that show it. Do not add rules without evidence.
+
+Answer with only one JSON object, no comments, matching this JSON schema:
+{json.dumps(Synthesis.model_json_schema())}"""
+
+
+def synthesis_input(steps: list[Step], pairs: list[dict], screens: list[dict]) -> str:
+    """Plain-text evidence for the workflows and rules call."""
+    lines = ["STEPS"]
+    for s in steps:
+        value = f" = {s.value!r}" if s.value else ""
+        note = f" ({s.confidence} confidence)" if s.confidence in ("medium", "low") else ""
+        code = f" [code {s.code}, {s.element}]" if s.code else (f" [{s.element}]" if s.action == "see_message" else "")
+        lines.append(f"{s.n}. [{s.screen}] {s.action} {s.target}{value}{note}{code}")
+
+    lines.append("\nDATA CHANGES")
+    for p in pairs:
+        if "analysis" not in p:
+            continue
+        around = [s.n for s in steps if s.frame_from >= p["from"] and s.frame_to <= p["to"]]
+        when = f"during steps {around[0]}-{around[-1]}" if around else f"between frames {p['from']} and {p['to']}"
+        for o in p["analysis"].observations:
+            lines.append(f"- {when}: {o.subject}: {o.before} -> {o.after}")
+
+    lines.append("\nSCREENS")
+    for screen in screens:
+        lines.append(f"- {screen['name']}")
+        conditional = [b["label"] for b in screen["buttons"] if b["enabled"] and not b["always_enabled"]]
+        if conditional:
+            lines.append(f"  buttons sometimes disabled: {', '.join(conditional)}")
+        for d in screen["dialogs"]:
+            lines.append(f"  message ({d['kind']}): {d['message']!r}")
+    return "\n".join(lines)
+
+
+def check_synthesis(steps: list[Step]):
+    """Reject workflows or rules that point at steps that do not exist or overlap."""
+    numbers = {s.n for s in steps}
+
+    def check(answer: Synthesis) -> str | None:
+        seen: dict[int, str] = {}
+        for wf in answer.workflows:
+            for n in wf.steps:
+                if n not in numbers:
+                    return f"workflow {wf.name!r} lists step {n}, which does not exist (steps are 1-{len(steps)})"
+                if n in seen:
+                    return f"step {n} is in two workflows: {seen[n]!r} and {wf.name!r}"
+                seen[n] = wf.name
+        if missing := sorted(numbers - set(seen)):
+            return f"steps {missing} are in no workflow; every step belongs to exactly one workflow"
+        for rule in answer.rules:
+            if bad := [n for n in rule.evidence_steps if n not in numbers]:
+                return f"rule {rule.description!r} cites steps {bad}, which do not exist"
+        return None
+
+    return check
+
+
+def synthesize(client: OpenAI, model: str, steps: list[Step], pairs: list[dict], screens: list[dict],
+               cache_dir: Path = CACHE_DIR) -> dict:
+    """Workflows and rules from the steps (one text-only call, cached by its input)."""
+    evidence = synthesis_input(steps, pairs, screens)
+    content = [{"type": "text", "text": SYNTHESIS_PROMPT}, {"type": "text", "text": evidence}]
+    key = cache_key(model.encode(), SYNTHESIS_PROMPT.encode(), evidence.encode())
+    return cached(
+        cache_dir, key, Synthesis,
+        lambda tokens: ask_json(client, model, content, Synthesis, tokens, check=check_synthesis(steps)),
+    )
+
+
+# ---------- Whole run ----------
+
+
+def run(run_dir: Path, provider: str | None = None, workers: int = 4, log: Callable[[str], None] = print) -> Path:
+    """Run the flows agent on a screens agent run. Writes and returns run_dir/flows.json."""
+    screens_report = json.loads((run_dir / "screens.json").read_text(encoding="utf-8"))
+    frames = load_frames(run_dir)
+    if len(frames) < 2:
+        raise ValueError(f"{run_dir} has fewer than 2 analysed keyframes")
+
+    config = load_provider(provider)
+    if missing := config.missing():
+        raise ValueError(f"missing in .env: {', '.join(missing)}")
+    client = make_client(config)
+
+    log(f"{len(frames) - 1} keyframe pairs")
+    pairs = read_pairs(client, config.model, frames, run_dir, workers, log)
+    steps = build_steps(frames, pairs)
+    cross_check(steps, frames, pairs)
+    log("workflows and rules...")
+    synthesis = synthesize(client, config.model, steps, pairs, screens_report["screens"])
+
+    calls = [p for p in pairs if "analysis" in p] + [synthesis]
+    spent = TokenCount()
+    for call in calls:
+        if not call["cached"]:
+            spent.merge(TokenCount.from_dict(call["tokens"]))
+
+    result = synthesis["analysis"]
+    report = {
+        "run": run_dir.as_posix(),
+        "video": screens_report["video"],
+        "created": datetime.now().isoformat(timespec="seconds"),
+        "provider": config.name,
+        "model": config.model,
+        "steps": [s.model_dump() for s in steps],
+        "workflows": [w.model_dump() for w in result.workflows],
+        "rules": [r.model_dump() for r in result.rules],
+        "observations": [
+            {"from": p["from"], "to": p["to"], "time_from": p["time_from"], "time_to": p["time_to"]} | o.model_dump()
+            for p in pairs if "analysis" in p for o in p["analysis"].observations
+        ],
+        "low_confidence": [s.n for s in steps if s.confidence == "low"],
+        "tokens": spent.as_dict(),
+        "cached_calls": sum(1 for c in calls if c["cached"]),
+        "failed_pairs": [f"{p['from']}->{p['to']}" for p in pairs if "error" in p],
+    }
+    path = run_dir / "flows.json"
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    return path
