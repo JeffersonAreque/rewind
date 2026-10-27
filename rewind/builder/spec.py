@@ -292,11 +292,16 @@ def opened_from(steps: list[dict], source: str, target: str) -> bool:
 
 def absorbed_steps(steps: list[dict], styles: dict[str, tuple[str, str]]) -> dict[int, str]:
     """Steps that a modern screen makes unnecessary: the click that closes a message
-    which is now shown inline or as a toast. styles: legacy screen -> (error, success)."""
+    which is now shown inline or as a toast. styles: legacy screen -> (error, success).
+
+    The style comes from the screen that produced the message (where the last click
+    happened), not where it shows: after a payment the message appears on the search page.
+    """
     absorbed = {}
-    for before, step in zip(steps, steps[1:]):
+    for i, (before, step) in enumerate(zip(steps, steps[1:])):
         if before["action"] == "see_message" and step["action"] == "click":
-            error_style, success_style = styles.get(normalize(before["screen"]), ("dialog", "dialog"))
+            producer = next((s for s in reversed(steps[:i]) if s["action"] == "click"), before)
+            error_style, success_style = styles.get(normalize(producer["screen"]), ("dialog", "dialog"))
             style = error_style if before.get("element") == "error" else success_style
             if style != "dialog":
                 kind = "inline_validation" if style == "inline" else "remove_dialog_step"
