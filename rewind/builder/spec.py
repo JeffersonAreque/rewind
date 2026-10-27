@@ -207,6 +207,8 @@ def check_data_model(model: DataModel, tables: dict[str, list[str]], rows: dict[
             problems.append(f"entity {e.name}: field names must be unique")
         if e.display not in names:
             problems.append(f"entity {e.name}: display field {e.display!r} is not one of its fields")
+        elif next(f for f in e.fields if f.name == e.display).type == "serial":
+            problems.append(f"entity {e.name}: display field {e.display!r} cannot be serial (serials are not stored)")
         for f in e.fields:
             if f.type == "ref" and f.ref not in entities:
                 problems.append(f"{e.name}.{f.name}: ref must name an entity, got {f.ref!r}")
@@ -238,6 +240,15 @@ def check_data_model(model: DataModel, tables: dict[str, list[str]], rows: dict[
                 for row in rows.get(table, []):
                     if i < len(row) and row[i] and normalize(row[i]) not in values:
                         problems.append(f"{entity.name}.{field.name}: value {row[i]!r} from {table!r} is not in enum_values")
+            elif field and field.type == "serial":
+                # A serial is the record number with a prefix, so the codes seen must be 1..n.
+                codes = sorted(row[i] for row in rows.get(table, []) if i < len(row))
+                expected = [f"{field.serial_prefix}{n:0{field.serial_digits}d}" for n in range(1, len(codes) + 1)]
+                if codes != expected:
+                    problems.append(
+                        f"{entity.name}.{field.name}: codes {codes} are not {field.serial_prefix} + the record "
+                        f"numbers 1..{len(codes)}; store it as a text field instead"
+                    )
     return problems
 
 
@@ -265,6 +276,16 @@ def check_modernization(mod: Modernization, screens: list[dict], steps: list[dic
             labels = set().union(*legacy_elements(by_name[normalize(change.screens[0])]).values())
             if normalize(change.element) not in labels:
                 problems.append(f"{where}: {change.element!r} is not on {change.screens[0]!r}")
+        if change.kind in ("inline_validation", "remove_dialog_step"):
+            # The style belongs to the screen that produced each message (where the click happened).
+            by_n = {s["n"]: s for s in steps}
+            for n in change.evidence_steps:
+                if by_n.get(n, {}).get("action") != "see_message":
+                    continue
+                clicks = [s for s in steps if s["n"] < n and s["action"] == "click"]
+                if clicks and normalize(clicks[-1]["screen"]) not in map(normalize, change.screens):
+                    problems.append(f"{where}: the message of step {n} comes from {clicks[-1]['screen']!r} "
+                                    f"(step {clicks[-1]['n']}); add that screen to screens")
         if change.kind == "remove_element" and change.element:
             used = [s["n"] for s in steps if normalize(s["target"]) == normalize(change.element)
                     and normalize(s["screen"]) in map(normalize, change.screens) and s["action"] != "open_screen"]
@@ -342,6 +363,12 @@ def check_screen(spec: ScreenSpec, screen: dict, model: DataModel, mod: Moderniz
     for f in spec.filters:
         if f.field not in own:
             problems.append(f"filter {f.legacy!r}: {f.field!r} is not a field of {spec.entity}")
+    serials = [f"{f.legacy!r}" for f in [*spec.filters] if own.get(f.field) and own[f.field].type == "serial"]
+    serials += [f"{f.legacy!r}" for f in spec.fields if own.get(f.name) and own[f.name].type == "serial"]
+    if spec.parent_lookup and parent.get(spec.parent_lookup) and parent[spec.parent_lookup].type == "serial":
+        serials.append(f"parent_lookup {spec.parent_lookup!r}")
+    if serials:
+        problems.append(f"{', '.join(serials)} use serial fields, which are not stored: they cannot be typed, filtered or looked up")
     if spec.table:
         for c in spec.table.columns:
             base, _, sub = c.field.partition(".")
@@ -410,6 +437,24 @@ def check_screen(spec: ScreenSpec, screen: dict, model: DataModel, mod: Moderniz
     if normalize(spec.embedded_in or "") != normalize(hosts[0] if hosts else ""):
         problems.append(f"embedded_in must be {hosts[0]!r}" if hosts else "embedded_in must be null")
 
+    # Element changes are really applied.
+    elements = {normalize(x.legacy): x for x in [*spec.fields, *spec.shown, *spec.filters, *spec.actions]}
+    if spec.table:
+        elements |= {normalize(c.legacy): c for c in spec.table.columns}
+    for c in mine:
+        element = elements.get(normalize(c.element or ""))
+        if c.kind == "rename_label" and element is not None and normalize(element.label) == normalize(element.legacy):
+            problems.append(f"rename_label {c.element!r}: its label is still {element.label!r}")
+        if c.kind == "default_value" and (element is None or not getattr(element, "default", None)):
+            problems.append(f"default_value {c.element!r}: the field has no default")
+        if c.kind == "remove_element" and element is not None:
+            problems.append(f"remove_element {c.element!r}: it is still on the screen")
+        if c.kind == "reorder_fields":
+            legacy_order = [normalize(f["label"]) for s in screen["sections"] for f in s["fields"]]
+            new_order = [normalize(x.legacy) for x in [*spec.shown, *spec.fields, *spec.filters]]
+            if [x for x in new_order if x in legacy_order] == [x for x in legacy_order if x in new_order]:
+                problems.append("reorder_fields: the fields are still in the legacy order")
+
     # Every step on this screen can be replayed.
     targets = have["fields"] | have["buttons"] | have["tables"] | {normalize(n.legacy) for n in mod.nav}
     for step in steps:
@@ -419,6 +464,17 @@ def check_screen(spec: ScreenSpec, screen: dict, model: DataModel, mod: Moderniz
         if normalize(step["target"]) not in targets and not dialog_button:
             problems.append(f"step {step['n']} ({step['action']} {step['target']}) has no element on this screen")
     return problems
+
+
+def coverage(spec: ScreenSpec, screen: dict, changes: list[Change]) -> dict:
+    """How many legacy elements of a screen the spec kept and removed on purpose."""
+    legacy = legacy_elements(screen)
+    total = set().union(*(legacy[k] for k in ("fields", "buttons", "columns")))
+    kept = {normalize(x.legacy) for x in [*spec.fields, *spec.shown, *spec.filters, *spec.actions]}
+    if spec.table:
+        kept |= {normalize(c.legacy) for c in spec.table.columns}
+    gone = removed(changes, spec.legacy)
+    return {"legacy": len(total), "kept": len(total & kept), "removed": len(total & gone - kept)}
 
 
 def check_rules_enforced(screens: list[ScreenSpec], rules: list[dict]) -> list[str]:

@@ -181,17 +181,21 @@ def cache_key(*parts: bytes) -> str:
     return digest.hexdigest()
 
 
-def cached(cache_dir: Path, key: str, schema: type[T], compute: Callable[[TokenCount], tuple[T, str]]) -> dict:
+def cached(cache_dir: Path, key: str, schema: type[T], compute: Callable[[TokenCount], tuple[T, str]],
+           check: Callable[[T], str | None] | None = None) -> dict:
     """Run `compute` once per key and keep its answer on disk, so a repeated run does not pay twice.
 
-    Returns {"analysis", "reasoning", "tokens", "cached"}; tokens are what the
-    original call cost, and cached says whether this run reused it.
+    A cached answer that the current `check` rejects (the checks got stricter
+    since it was stored) is computed again. Returns {"analysis", "reasoning",
+    "tokens", "cached"}; tokens are what the original call cost, and cached
+    says whether this run reused it.
     """
     path = cache_dir / f"{key}.json"
     if path.exists():
         record = json.loads(path.read_text(encoding="utf-8"))
         record["analysis"] = schema.model_validate(record["analysis"])
-        return record | {"cached": True}
+        if check is None or check(record["analysis"]) is None:
+            return record | {"cached": True}
 
     tokens = TokenCount()
     result, reasoning = compute(tokens)
