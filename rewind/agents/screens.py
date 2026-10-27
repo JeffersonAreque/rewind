@@ -11,6 +11,7 @@ used; the optional `box` of each element is where it would plug in.
 """
 
 import base64
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -19,10 +20,12 @@ from typing import Literal
 from openai import BadRequestError, OpenAI
 from pydantic import BaseModel, Field, ValidationError
 
+from rewind.config import ROOT
 from rewind.llm import TokenCount, split_reasoning
 
 RETRIES = 2
 MAX_TOKENS = 12000
+CACHE_DIR = ROOT / "runs" / "cache" / "screens"
 
 
 class Box(BaseModel):
@@ -78,7 +81,6 @@ class FrameAnalysis(BaseModel):
     status_bar: list[str] = Field(default_factory=list)
 
 
-PROMPT_VERSION = 1
 PROMPT = f"""You are reading one screenshot of an old desktop business application.
 Describe the user interface as JSON. Rules:
 - Copy every text exactly as shown (same language, same capitals). Do not translate.
@@ -162,3 +164,33 @@ def analyze_frame(client: OpenAI, model: str, image: Path, tokens: TokenCount) -
                 {"role": "user", "content": f"That JSON is not valid:\n{exc}\nAnswer again with only the corrected JSON object."},
             ]
     raise AssertionError("unreachable")
+
+
+def cache_key(image: Path, model: str) -> str:
+    """Same image, model and prompt give the same key; editing the prompt invalidates old entries."""
+    digest = hashlib.sha256()
+    for part in (model.encode(), PROMPT.encode(), image.read_bytes()):
+        digest.update(hashlib.sha256(part).digest())
+    return digest.hexdigest()
+
+
+def analyze_cached(client: OpenAI, model: str, image: Path, cache_dir: Path = CACHE_DIR) -> dict:
+    """analyze_frame with a disk cache, so a repeated run does not pay twice.
+
+    Returns {"analysis", "reasoning", "tokens", "cached"}; tokens are what the
+    original call cost, and cached says whether this run reused it.
+    """
+    path = cache_dir / f"{cache_key(image, model)}.json"
+    if path.exists():
+        record = json.loads(path.read_text(encoding="utf-8"))
+        record["analysis"] = FrameAnalysis.model_validate(record["analysis"])
+        return record | {"cached": True}
+
+    tokens = TokenCount()
+    analysis, reasoning = analyze_frame(client, model, image, tokens)
+    record = {"analysis": analysis, "reasoning": reasoning, "tokens": tokens.as_dict()}
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(record | {"analysis": analysis.model_dump()}, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
+    return record | {"cached": False}

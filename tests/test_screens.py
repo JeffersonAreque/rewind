@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from rewind.agents.screens import FrameAnalysis, analyze_frame, extract_json
+from rewind.agents.screens import FrameAnalysis, analyze_cached, analyze_frame, cache_key, extract_json
 from rewind.llm import TokenCount
 
 VALID = '{"screen_name": "LOGIN", "window_title": "INICIO DE SESION"}'
@@ -45,6 +45,27 @@ def test_retry_sends_validation_error_back(tmp_path):
     assert reasoning == "thinking"
     assert tokens.calls == 2
     assert "window_title" in client.calls[1][-1]["content"]
+
+
+def test_cache_avoids_second_call(tmp_path):
+    image = tmp_path / "frame.png"
+    image.write_bytes(b"png")
+    client = FakeClient(VALID)
+
+    first = analyze_cached(client, "model", image, tmp_path / "cache")
+    second = analyze_cached(client, "model", image, tmp_path / "cache")
+
+    assert not first["cached"] and second["cached"]
+    assert second["analysis"] == first["analysis"]
+    assert len(client.calls) == 1
+
+
+def test_cache_key_depends_on_model_and_image(tmp_path):
+    a, b = tmp_path / "a.png", tmp_path / "b.png"
+    a.write_bytes(b"one")
+    b.write_bytes(b"two")
+    assert cache_key(a, "m1") != cache_key(b, "m1")
+    assert cache_key(a, "m1") != cache_key(a, "m2")
 
 
 def test_gives_up_after_retries(tmp_path):
