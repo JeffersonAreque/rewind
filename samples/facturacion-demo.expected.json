@@ -1,0 +1,73 @@
+{
+  "video": "samples/facturacion-demo.mp4",
+  "about": "What the screens agent should find in the demo video. Written by hand from legacy-demo/templates/, which Rewind never sees.",
+  "screens": [
+    {
+      "name": "LOGIN",
+      "aliases": ["INICIO DE SESION"],
+      "menus": [],
+      "fields": [
+        {"label": "USUARIO", "type": "text", "editable": true},
+        {"label": "CLAVE", "type": "password", "editable": true}
+      ],
+      "buttons": ["ACEPTAR", "CANCELAR"],
+      "tables": [],
+      "dialogs": []
+    },
+    {
+      "name": "REGISTRO DE CLIENTES",
+      "aliases": ["CLIENTES"],
+      "menus": ["ARCHIVO", "CLIENTES", "FACTURAS", "PAGOS", "AYUDA"],
+      "fields": [
+        {"label": "RUC / DNI", "type": "text", "editable": true},
+        {"label": "RAZON SOCIAL", "type": "text", "editable": true},
+        {"label": "DIRECCION", "type": "text", "editable": true},
+        {"label": "TELEFONO", "type": "text", "editable": true},
+        {"label": "CORREO", "type": "text", "editable": true}
+      ],
+      "buttons": ["GRABAR", "LIMPIAR"],
+      "tables": [
+        {"name": "CLIENTES REGISTRADOS", "columns": ["CODIGO", "RUC / DNI", "RAZON SOCIAL", "DIRECCION", "TELEFONO"]}
+      ],
+      "dialogs": ["ERROR 0x0042: CAMPO OBLIGATORIO", "OPERACION COMPLETADA SATISFACTORIAMENTE."]
+    },
+    {
+      "name": "BUSQUEDA DE FACTURAS",
+      "aliases": ["FACTURAS"],
+      "menus": ["ARCHIVO", "CLIENTES", "FACTURAS", "PAGOS", "AYUDA"],
+      "fields": [
+        {"label": "NRO. FACTURA", "type": "text", "editable": true},
+        {"label": "CLIENTE", "type": "select", "editable": true},
+        {"label": "ESTADO", "type": "select", "editable": true},
+        {"label": "FECHA DESDE", "type": "date", "editable": true},
+        {"label": "FECHA HASTA", "type": "date", "editable": true}
+      ],
+      "buttons": ["BUSCAR", "LIMPIAR", "REGISTRAR PAGO"],
+      "tables": [
+        {"name": "RESULTADOS", "columns": ["NRO. FACTURA", "FECHA", "CLIENTE", "TOTAL", "SALDO", "ESTADO"]}
+      ],
+      "dialogs": ["OPERACION COMPLETADA SATISFACTORIAMENTE."]
+    },
+    {
+      "name": "REGISTRAR PAGO",
+      "aliases": ["PAGOS"],
+      "menus": ["ARCHIVO", "CLIENTES", "FACTURAS", "PAGOS", "AYUDA"],
+      "fields": [
+        {"label": "NRO. FACTURA", "type": "text", "editable": true},
+        {"label": "CLIENTE", "type": "text", "editable": false},
+        {"label": "FECHA EMISION", "type": "date", "editable": false},
+        {"label": "TOTAL", "type": "amount", "editable": false},
+        {"label": "SALDO PENDIENTE", "type": "amount", "editable": false},
+        {"label": "ESTADO", "type": "text", "editable": false},
+        {"label": "MONTO S/", "type": "amount", "editable": true},
+        {"label": "FECHA PAGO", "type": "date", "editable": true},
+        {"label": "METODO", "type": "radio", "editable": true},
+        {"label": "NRO. OPERACION", "type": "text", "editable": true}
+      ],
+      "buttons": ["BUSCAR", "GRABAR", "CANCELAR"],
+      "tables": [],
+      "dialogs": []
+    }
+  ],
+  "navigation": ["LOGIN", "REGISTRO DE CLIENTES", "BUSQUEDA DE FACTURAS", "REGISTRAR PAGO", "BUSQUEDA DE FACTURAS"]
+}
