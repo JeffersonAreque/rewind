@@ -50,6 +50,34 @@ def cmd_screens(args: argparse.Namespace) -> int:
     return 1 if report["failed_frames"] else 0
 
 
+def cmd_flows(args: argparse.Namespace) -> int:
+    from rewind.agents import flows
+
+    if not (args.run / "screens.json").is_file():
+        raise ValueError(f"{args.run} has no screens.json; run `python -m rewind screens VIDEO` first")
+    path = flows.run(args.run, args.provider, args.workers)
+
+    report = json.loads(path.read_text(encoding="utf-8"))
+    steps = {s["n"]: s for s in report["steps"]}
+    print(f"\n{len(steps)} steps, {len(report['workflows'])} workflows:")
+    for wf in report["workflows"]:
+        print(f"  {wf['name']:<28} steps {min(wf['steps'])}-{max(wf['steps'])}")
+    print(f"{len(report['rules'])} rules:")
+    for rule in report["rules"]:
+        code = f" [{rule['code']}]" if rule["code"] else ""
+        print(f"  {rule['kind']:<15} {rule['description']}{code}")
+    for n in report["low_confidence"]:
+        s = steps[n]
+        print(f"Check step {n}: {s['target']} = {s['value']!r} (low confidence; also read as {s['variants']})")
+    tokens = report["tokens"]
+    print(f"Tokens this run: {tokens['total']} ({tokens['reasoning']} reasoning, {tokens['calls']} calls); "
+          f"{report['cached_calls']} calls from cache")
+    if report["failed_pairs"]:
+        print(f"Failed pairs: {report['failed_pairs']}")
+    print(f"\n{path}")
+    return 1 if report["failed_pairs"] else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="rewind", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -69,6 +97,12 @@ def main() -> int:
     screens.add_argument("--min-change", type=int, default=60,
                          help="changed pixels at 320x180 to count as a new keyframe (default 60)")
     screens.set_defaults(func=cmd_screens)
+
+    flows = commands.add_parser("flows", help="flows agent: steps, workflows and rules of a screens run")
+    flows.add_argument("run", type=Path, help="run folder made by the screens command (runs/<id>)")
+    flows.add_argument("--provider", choices=PROVIDERS, help="override REWIND_PROVIDER")
+    flows.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
+    flows.set_defaults(func=cmd_flows)
 
     args = parser.parse_args()
     try:
