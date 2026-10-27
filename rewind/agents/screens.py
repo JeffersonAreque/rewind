@@ -206,10 +206,11 @@ def analyze_cached(client: OpenAI, model: str, image: Path, cache_dir: Path = CA
 
 
 def normalize(text: str) -> str:
-    """Comparable form of a label: capitals, no accents, no trailing colon, single spaces."""
+    """Comparable form of a label: capitals, no accents, no colons, single spaces and
+    no trailing dot ("MONTO S/." and "MONTO S/" are the same label)."""
     text = unicodedata.normalize("NFKD", text)
     text = "".join(c for c in text if not unicodedata.combining(c))
-    return " ".join(text.upper().replace(":", " ").split())
+    return " ".join(text.upper().replace(":", " ").split()).rstrip(" .")
 
 
 def most_common(values: list):
@@ -259,8 +260,9 @@ def merge_screen(name: str, frames: list[dict]) -> dict:
     for _, a in analyses:
         for table in a.tables:
             key = normalize(table.name) or "|".join(map(normalize, table.columns))
-            if key not in tables or len(table.columns) > len(tables[key].columns):
-                tables[key] = table.model_copy(update={"rows": max(table.rows, tables.get(key, table).rows)})
+            known = tables.get(key)
+            best = table if known is None or len(table.columns) > len(known.columns) else known
+            tables[key] = best.model_copy(update={"rows": max(table.rows, known.rows if known else 0)})
 
     dialogs: list[dict] = []
     for time, a in analyses:

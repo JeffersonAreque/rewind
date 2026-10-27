@@ -91,6 +91,8 @@ def test_gives_up_after_retries(tmp_path):
 def test_normalize():
     assert normalize("  Razón social: ") == "RAZON SOCIAL"
     assert normalize("REGISTRO  DE clientes") == "REGISTRO DE CLIENTES"
+    assert normalize("MONTO S/.") == normalize("MONTO S/") == "MONTO S/"
+    assert normalize("NRO. FACTURA") == "NRO. FACTURA"
 
 
 def test_merge_fields_majority_and_values():
@@ -136,3 +138,13 @@ def test_group_screens_and_navigation():
     assert [n["screen"] for n in navigation] == [
         "inicio-de-sesion", "registro-de-clientes", "busqueda-de-facturas", "registro-de-clientes",
     ]
+
+
+def test_table_keeps_most_rows_seen():
+    from rewind.agents.screens import Table
+
+    empty, found = frame(0, 1.0, "BUSQUEDA"), frame(1, 2.0, "BUSQUEDA")
+    empty["analysis"].tables = [Table(name="RESULTADOS", columns=["NRO", "TOTAL"], rows=0)]
+    found["analysis"].tables = [Table(name="RESULTADOS", columns=["NRO", "TOTAL"], rows=3)]
+    screens, _ = group_screens([empty, found])
+    assert screens[0]["tables"][0]["rows"] == 3
