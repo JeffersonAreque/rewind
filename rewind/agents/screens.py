@@ -10,8 +10,6 @@ which answers with structured JSON validated by pydantic. SAM 3.1 is not
 used; the optional `box` of each element is where it would plug in.
 """
 
-import base64
-import hashlib
 import json
 import re
 import unicodedata
@@ -27,10 +25,9 @@ from pydantic import BaseModel, Field, ValidationError
 
 from rewind.config import ROOT, load_provider
 from rewind.keyframes import Settings, extract
-from rewind.llm import TokenCount, make_client, split_reasoning
+from rewind.llm import TokenCount, ask_json, cached, extract_json, image_url, make_client  # noqa: F401
+from rewind.llm import cache_key as llm_cache_key
 
-RETRIES = 2
-MAX_TOKENS = 12000
 CACHE_DIR = ROOT / "runs" / "cache" / "screens"
 
 
@@ -104,102 +101,26 @@ Answer with only one JSON object, no comments, matching this JSON schema:
 {json.dumps(FrameAnalysis.model_json_schema())}
 """
 
-FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
-
-
-def extract_json(answer: str) -> str:
-    """Take the JSON object out of an answer that may wrap it in ``` or prose."""
-    answer = FENCE.sub("", answer.strip())
-    start, end = answer.find("{"), answer.rfind("}")
-    return answer[start:end + 1] if start != -1 and end > start else answer
-
-
-def image_url(path: Path) -> str:
-    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode()
-
-
-RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {"name": "frame_analysis", "schema": FrameAnalysis.model_json_schema()},
-}
-_schema_supported = True
-
-
-def complete(client: OpenAI, model: str, messages: list[dict]):
-    """Chat call that asks for schema-constrained JSON when the provider allows it.
-
-    Baseten accepts response_format; a provider that rejects it falls back to
-    the schema written in the prompt, which pydantic still validates.
-    """
-    global _schema_supported
-    if _schema_supported:
-        try:
-            return client.chat.completions.create(
-                model=model, messages=messages, max_tokens=MAX_TOKENS, response_format=RESPONSE_FORMAT
-            )
-        except BadRequestError as exc:
-            if "response_format" not in str(exc) and "json_schema" not in str(exc):
-                raise
-            _schema_supported = False
-    return client.chat.completions.create(model=model, messages=messages, max_tokens=MAX_TOKENS)
-
-
 def analyze_frame(client: OpenAI, model: str, image: Path, tokens: TokenCount) -> tuple[FrameAnalysis, str]:
-    """Ask the model to read one keyframe. Returns the analysis and the model's reasoning.
-
-    A malformed answer is sent back with the validation error, up to RETRIES times.
-    """
-    messages: list[dict] = [{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": PROMPT},
-            {"type": "image_url", "image_url": {"url": image_url(image)}},
-        ],
-    }]
-    for attempt in range(RETRIES + 1):
-        response = complete(client, model, messages)
-        tokens.add(response.usage)
-        reasoning, answer = split_reasoning(response.choices[0].message)
-        try:
-            return FrameAnalysis.model_validate_json(extract_json(answer)), reasoning
-        except ValidationError as exc:
-            if attempt == RETRIES:
-                raise
-            messages += [
-                {"role": "assistant", "content": answer},
-                {"role": "user", "content": f"That JSON is not valid:\n{exc}\nAnswer again with only the corrected JSON object."},
-            ]
-    raise AssertionError("unreachable")
+    """Ask the model to read one keyframe. Returns the analysis and the model's reasoning."""
+    content = [
+        {"type": "text", "text": PROMPT},
+        {"type": "image_url", "image_url": {"url": image_url(image)}},
+    ]
+    return ask_json(client, model, content, FrameAnalysis, tokens)
 
 
 def cache_key(image: Path, model: str) -> str:
     """Same image, model and prompt give the same key; editing the prompt invalidates old entries."""
-    digest = hashlib.sha256()
-    for part in (model.encode(), PROMPT.encode(), image.read_bytes()):
-        digest.update(hashlib.sha256(part).digest())
-    return digest.hexdigest()
+    return llm_cache_key(model.encode(), PROMPT.encode(), image.read_bytes())
 
 
 def analyze_cached(client: OpenAI, model: str, image: Path, cache_dir: Path = CACHE_DIR) -> dict:
-    """analyze_frame with a disk cache, so a repeated run does not pay twice.
-
-    Returns {"analysis", "reasoning", "tokens", "cached"}; tokens are what the
-    original call cost, and cached says whether this run reused it.
-    """
-    path = cache_dir / f"{cache_key(image, model)}.json"
-    if path.exists():
-        record = json.loads(path.read_text(encoding="utf-8"))
-        record["analysis"] = FrameAnalysis.model_validate(record["analysis"])
-        return record | {"cached": True}
-
-    tokens = TokenCount()
-    analysis, reasoning = analyze_frame(client, model, image, tokens)
-    record = {"analysis": analysis, "reasoning": reasoning, "tokens": tokens.as_dict()}
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(record | {"analysis": analysis.model_dump()}, ensure_ascii=False, indent=1), encoding="utf-8"
+    """analyze_frame with a disk cache. Returns {"analysis", "reasoning", "tokens", "cached"}."""
+    return cached(
+        cache_dir, cache_key(image, model), FrameAnalysis,
+        lambda tokens: analyze_frame(client, model, image, tokens),
     )
-    return record | {"cached": False}
 
 
 # ---------- Grouping frames into screens ----------
@@ -361,7 +282,7 @@ def run(
     spent = TokenCount()
     for f in frames:
         if not f.get("cached", True):
-            spent.merge(TokenCount(**{k: f["tokens"][k] for k in ("prompt", "completion", "reasoning", "calls")}))
+            spent.merge(TokenCount.from_dict(f["tokens"]))
     analysed = [f for f in frames if "analysis" in f]
     screens, navigation = group_screens(analysed)
 
