@@ -1,0 +1,46 @@
+{# A transaction (e.g. a payment) on a parent record (e.g. an invoice). `t` holds its context. #}
+{% from "macros.html" import field_input, error_box with context %}
+{% set s = t.screen %}
+
+{% if s.parent_lookup and not s.embedded_in %}
+<form method="get" class="lookup">
+  {% for f in s.shown if f.name == s.parent_lookup %}
+  <div class="field">
+    <label for="lookup">{{ f.label }}</label>
+    <input id="lookup" name="lookup" value="{{ t.lookup or (t.parent[f.name] if t.parent else '') }}" data-legacy="{{ f.legacy }}">
+  </div>
+  {% endfor %}
+  {% for a in s.actions if a.action == 'lookup' %}
+  <button type="submit" class="btn" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
+  {% endfor %}
+</form>
+{% endif %}
+
+{% if t.parent %}
+<dl class="facts">
+  {% for f in s.shown if f.name != s.parent_lookup or s.embedded_in %}
+  <div><dt>{{ f.label }}</dt>
+    <dd data-legacy="{{ f.legacy }}">
+      {% set field = spec.field(s.parent, f.name) %}
+      {% set text = show(field, t.parent[f.name], t.parent) %}
+      {% if field.type == 'enum' %}<span class="badge tone-{{ field.enum_values.index(text) if text in field.enum_values else 0 }}">{{ text }}</span>{% else %}{{ text }}{% endif %}
+    </dd></div>
+  {% endfor %}
+</dl>
+
+<form method="post" action="{{ url_for('page', screen_id=s.id) }}" novalidate>
+  <input type="hidden" name="parent" value="{{ t.parent.id }}">
+  {{ error_box(s, t.errors) }}
+  <div class="form-grid">
+    {% for f in s.fields %}{{ field_input(s, f, t['values'].get(f.name, ''), t.errors, entity=s.entity) }}{% endfor %}
+  </div>
+  <div class="actions">
+    {% for a in s.actions %}
+      {% if a.action == 'save' %}<button type="submit" class="btn primary" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
+      {% elif a.action == 'cancel' %}<a class="btn" href="{{ url_for('page', screen_id=spec.host(a.target)) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>{% endif %}
+    {% endfor %}
+  </div>
+</form>
+{% elif t.lookup %}
+<p class="alert" role="alert">No se encontró «{{ t.lookup }}».</p>
+{% endif %}

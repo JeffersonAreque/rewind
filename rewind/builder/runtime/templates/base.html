@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ spec.data.title }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+{% block body %}{% endblock %}
+
+{# Messages after a redirect: a dialog that needs a click, or a toast that leaves on its own. #}
+{% for m in messages %}
+  {% if m.style == 'toast' %}
+  <div class="toast" role="status" data-message>{{ m.text }}</div>
+  {% else %}
+  <dialog class="dialog" open aria-labelledby="dlg-text" data-message>
+    <p id="dlg-text">{{ m.text }}</p>
+    <button type="button" class="btn primary" data-legacy="ACEPTAR" data-close autofocus>Aceptar</button>
+  </dialog>
+  {% endif %}
+{% endfor %}
+</body>
+</html>

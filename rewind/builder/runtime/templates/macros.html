@@ -1,0 +1,71 @@
+{# Building blocks shared by every page. data-legacy keeps the legacy label of each element. #}
+
+{% macro field_input(screen, f, value, errors, prefix='f_', entity=None) -%}
+{% set id = prefix ~ f.name %}
+{% set error = errors.get(f.name) if screen.error_style == 'inline' else None %}
+<div class="field{% if error %} has-error{% endif %}">
+  {% if f.input == 'radio' %}
+    <fieldset class="radios" data-legacy="{{ f.legacy }}">
+      <legend>{{ f.label }}</legend>
+      {% for v, text in options(entity, f.name) %}
+      <label><input type="radio" name="{{ id }}" value="{{ v }}" {{ 'checked' if norm(v) == norm(value) }}> {{ text }}</label>
+      {% endfor %}
+    </fieldset>
+  {% else %}
+    <label for="{{ id }}">{{ f.label }}</label>
+    {% if f.input == 'select' %}
+    <select id="{{ id }}" name="{{ id }}" data-legacy="{{ f.legacy }}">
+      <option value="">Elegir…</option>
+      {% for v, text in options(entity, f.name) %}
+      <option value="{{ v }}" {{ 'selected' if v == value|string }}>{{ text }}</option>
+      {% endfor %}
+    </select>
+    {% else %}
+    <input id="{{ id }}" name="{{ id }}" data-legacy="{{ f.legacy }}" value="{{ value or '' }}"
+      type="{{ 'password' if f.input == 'password' else 'date' if f.input == 'date' else 'text' }}"
+      {% if f.input == 'money' %}inputmode="decimal" class="num"{% endif %}
+      {% if error %}aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+    {% endif %}
+  {% endif %}
+  {% if error %}<p class="field-error" id="{{ id }}-error">{{ error }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro error_box(screen, errors) -%}
+{% set field_errors = errors|dictsort|rejectattr(0, 'equalto', '_')|list %}
+{% if field_errors %}
+  {% if screen.error_style == 'inline' %}
+  <p class="alert" role="alert">Revise {{ 'el campo marcado' if field_errors|length == 1 else 'los campos marcados' }}.</p>
+  {% else %}
+  {% set name, text = field_errors[0] %}
+  <dialog class="dialog" open aria-labelledby="err-text">
+    <p id="err-text" class="error-text">{{ text }}<br>{{ (screen.fields|selectattr('name', 'equalto', name)|first or {'legacy': name}).legacy }}</p>
+    <button type="button" class="btn primary" data-legacy="ACEPTAR" data-close data-focus="f_{{ name }}" autofocus>Aceptar</button>
+  </dialog>
+  {% endif %}
+{% endif %}
+{%- endmacro %}
+
+{% macro table(screen, rows, selected='') -%}
+<div class="table-wrap">
+<table class="grid{{ ' selectable' if screen.table.selectable }}" data-legacy="{{ screen.table.legacy }}">
+  <caption class="sr-only">{{ screen.table.label }}</caption>
+  <thead><tr>{% for c in screen.table.columns %}<th scope="col" data-legacy="{{ c.legacy }}">{{ c.label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr data-id="{{ row.id }}" {% if screen.table.selectable %}tabindex="0" aria-selected="{{ 'true' if row.id|string == selected|string else 'false' }}"{% endif %}>
+      {% for c in screen.table.columns %}
+        {% set text = cell(screen, c, row) %}
+        {% set field = spec.field(screen.entity, c.field.split('.')[0]) %}
+        <td class="{{ 'num' if field.type == 'money' }}">
+          {% if field.type == 'enum' %}<span class="badge tone-{{ field.enum_values.index(text) if text in field.enum_values else 0 }}">{{ text }}</span>{% else %}{{ text }}{% endif %}
+        </td>
+      {% endfor %}
+    </tr>
+  {% else %}
+    <tr class="empty"><td colspan="{{ screen.table.columns|length }}">Sin registros</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{%- endmacro %}

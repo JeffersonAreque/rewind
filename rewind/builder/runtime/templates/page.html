@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "macros.html" import field_input, error_box, table with context %}
+{% block title %}{{ screen.title }} · {{ spec.data.title }}{% endblock %}
+{% block body %}
+<div class="shell">
+  <nav class="sidebar" aria-label="Menú principal">
+    <p class="brand">{{ spec.data.title }}</p>
+    <ul>
+      {# Several entries can open the same page (a merged screen); only the one for this screen is current. #}
+      {% set current = spec.data.nav|selectattr('screen', 'equalto', screen.id)|first %}
+      {% for item in spec.data.nav %}
+      <li><a href="{{ url_for('page', screen_id=spec.host(item.screen)) }}" data-legacy="{{ item.legacy }}"
+             {% if current and item.screen == current.screen %}aria-current="page"{% endif %}>{{ item.label }}</a></li>
+      {% endfor %}
+    </ul>
+    <p class="user">{{ session.user }} · <a href="{{ url_for('logout') }}">Salir</a></p>
+  </nav>
+
+  <main class="content{{ ' with-panel' if panel }}">
+    <section class="card" data-legacy-screen="{{ screen.legacy }}">
+      <h1>{{ screen.title }}</h1>
+
+      {% if screen.kind == 'create' %}
+        <form method="post" novalidate>
+          {{ error_box(screen, errors) }}
+          <div class="form-grid">
+            {% for f in screen.fields %}{{ field_input(screen, f, values.get(f.name, ''), errors, entity=screen.entity) }}{% endfor %}
+          </div>
+          <div class="actions">
+            {% for a in screen.actions %}
+              {% if a.action == 'save' %}<button type="submit" class="btn primary" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
+              {% elif a.action == 'clear' %}<a class="btn" href="{{ url_for('page', screen_id=screen.id) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>
+              {% elif a.action == 'cancel' %}<a class="btn" href="{{ url_for('page', screen_id=spec.host(a.target)) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>{% endif %}
+            {% endfor %}
+          </div>
+        </form>
+        {% if screen.table %}<h2>{{ screen.table.label }}</h2>{{ table(screen, rows) }}{% endif %}
+
+      {% elif screen.kind == 'search' %}
+        <form method="get" class="filters" role="search">
+          <div class="form-grid">
+            {% for f in screen.filters %}
+            <div class="field">
+              <label for="q_{{ f.name }}">{{ f.label }}</label>
+              {% if f.input == 'select' %}
+              <select id="q_{{ f.name }}" name="{{ f.name }}" data-legacy="{{ f.legacy }}">
+                <option value="">Todos</option>
+                {% for v, text in options(screen.entity, f.field) %}
+                <option value="{{ v }}" {{ 'selected' if v == filters[f.name] }}>{{ text }}</option>
+                {% endfor %}
+              </select>
+              {% else %}
+              <input id="q_{{ f.name }}" name="{{ f.name }}" value="{{ filters[f.name] }}" data-legacy="{{ f.legacy }}"
+                     type="{{ 'date' if f.input == 'date' else 'search' }}">
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          <div class="actions">
+            {% for a in screen.actions %}
+              {% if a.action == 'search' %}<button type="submit" class="btn primary" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
+              {% elif a.action == 'clear' %}<a class="btn" href="{{ url_for('page', screen_id=screen.id) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>{% endif %}
+            {% endfor %}
+          </div>
+        </form>
+
+        <h2>{{ screen.table.label }} <span class="muted">({{ rows|length }})</span></h2>
+        {{ table(screen, rows, selected) }}
+
+        {% for a in screen.actions if a.action == 'open' %}
+          {% set embedded = spec.screens[a.target].embedded_in == screen.id %}
+          <form method="get" class="actions end" action="{{ url_for('page', screen_id=screen.id if embedded else a.target) }}">
+            {% if embedded %}
+              <input type="hidden" name="panel" value="{{ a.target }}">
+              {% for f in screen.filters %}<input type="hidden" name="{{ f.name }}" value="{{ filters[f.name] }}">{% endfor %}
+              <input type="hidden" name="sel" value="{{ selected }}" data-selection>
+            {% else %}
+              <input type="hidden" name="parent" value="{{ selected }}" data-selection>
+            {% endif %}
+            <button type="submit" class="btn primary" data-legacy="{{ a.legacy }}"
+                    {% if a.requires_selection %}data-requires-selection {{ 'disabled' if not selected }}{% endif %}>{{ a.label }}</button>
+          </form>
+        {% endfor %}
+
+      {% elif screen.kind == 'transaction' %}
+        {% with t = {'screen': screen, 'parent': parent, 'values': values, 'errors': errors, 'lookup': lookup} %}
+          {% include "transaction.html" %}
+        {% endwith %}
+      {% endif %}
+    </section>
+
+    {% if panel %}
+    <section class="card panel" data-legacy-screen="{{ panel.screen.legacy }}" aria-label="{{ panel.screen.title }}">
+      <h2>{{ panel.screen.title }}</h2>
+      {% with t = panel %}{% include "transaction.html" %}{% endwith %}
+    </section>
+    {% endif %}
+  </main>
+</div>
+{% endblock %}

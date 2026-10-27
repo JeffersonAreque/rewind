@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "macros.html" import field_input, error_box with context %}
+{% block body %}
+<main class="login" data-legacy-screen="{{ screen.legacy }}">
+  <form method="post" class="card login-card" novalidate>
+    <h1>{{ spec.data.title }}</h1>
+    <p class="muted">{{ screen.title }}</p>
+    {% if errors._ %}<p class="alert" role="alert">{{ errors._ }}</p>{% endif %}
+    {{ error_box(screen, errors) }}
+    {% for f in screen.fields %}
+      {{ field_input(screen, f, values.get(f.name, ''), errors, prefix='') }}
+    {% endfor %}
+    <div class="actions">
+      {% for a in screen.actions %}
+        {% if a.action == 'login' %}
+        <button type="submit" class="btn primary" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
+        {% else %}
+        <button type="reset" class="btn" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </form>
+</main>
+{% endblock %}

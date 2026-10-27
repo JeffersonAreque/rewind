@@ -1,0 +1,161 @@
+{
+  "about": "Hand-written app spec and seed for the demo video. Tests use it to check the runtime and the test generator without calling the model. The builder agent writes the same shape from Muse Spark's answers.",
+  "spec": {
+    "title": "Facturación Amazonía",
+    "currency": "S/ ",
+    "users": ["ADMIN"],
+    "home": "registro-de-clientes",
+    "entities": [
+      {"name": "customer", "label": "Cliente", "display": "business_name", "fields": [
+        {"name": "code", "type": "serial", "label": "Código", "serial_prefix": "C", "serial_digits": 4},
+        {"name": "document", "type": "text", "label": "RUC / DNI"},
+        {"name": "business_name", "type": "text", "label": "Razón social"},
+        {"name": "address", "type": "text", "label": "Dirección"},
+        {"name": "phone", "type": "text", "label": "Teléfono"},
+        {"name": "email", "type": "text", "label": "Correo"}
+      ]},
+      {"name": "invoice", "label": "Factura", "display": "number", "fields": [
+        {"name": "number", "type": "text", "label": "N.º de factura"},
+        {"name": "date", "type": "date", "label": "Fecha de emisión"},
+        {"name": "customer", "type": "ref", "label": "Cliente", "ref": "customer"},
+        {"name": "total", "type": "money", "label": "Total"},
+        {"name": "balance", "type": "money", "label": "Saldo pendiente"},
+        {"name": "status", "type": "enum", "label": "Estado", "enum_values": ["PENDIENTE", "PARCIAL", "PAGADA"]}
+      ]},
+      {"name": "payment", "label": "Pago", "display": "operation", "fields": [
+        {"name": "invoice", "type": "ref", "label": "Factura", "ref": "invoice"},
+        {"name": "amount", "type": "money", "label": "Monto"},
+        {"name": "date", "type": "date", "label": "Fecha de pago"},
+        {"name": "method", "type": "enum", "label": "Método", "enum_values": ["EFECTIVO", "TRANSFERENCIA", "CHEQUE"]},
+        {"name": "operation", "type": "text", "label": "N.º de operación"}
+      ]}
+    ],
+    "nav": [
+      {"label": "Clientes", "legacy": "CLIENTES", "screen": "registro-de-clientes"},
+      {"label": "Facturas y pagos", "legacy": "FACTURAS", "screen": "busqueda-de-facturas"},
+      {"label": "Registrar pago", "legacy": "PAGOS", "screen": "registrar-pago"}
+    ],
+    "screens": [
+      {
+        "id": "inicio-de-sesion", "legacy": "INICIO DE SESION", "kind": "login", "title": "Iniciar sesión",
+        "fields": [
+          {"name": "username", "label": "Usuario", "legacy": "USUARIO", "input": "text"},
+          {"name": "password", "label": "Contraseña", "legacy": "CLAVE", "input": "password"}
+        ],
+        "actions": [
+          {"label": "Ingresar", "legacy": "ACEPTAR", "action": "login"},
+          {"label": "Cancelar", "legacy": "CANCELAR", "action": "clear"}
+        ],
+        "enforces": [1]
+      },
+      {
+        "id": "registro-de-clientes", "legacy": "REGISTRO DE CLIENTES", "kind": "create", "title": "Clientes",
+        "entity": "customer",
+        "fields": [
+          {"name": "document", "label": "RUC / DNI", "legacy": "RUC / DNI", "input": "text"},
+          {"name": "business_name", "label": "Razón social", "legacy": "RAZON SOCIAL", "input": "text"},
+          {"name": "address", "label": "Dirección", "legacy": "DIRECCION", "input": "text"},
+          {"name": "phone", "label": "Teléfono", "legacy": "TELEFONO", "input": "text"},
+          {"name": "email", "label": "Correo", "legacy": "CORREO", "input": "text"}
+        ],
+        "table": {"legacy": "CLIENTES REGISTRADOS", "label": "Clientes registrados", "columns": [
+          {"field": "code", "label": "Código", "legacy": "CODIGO"},
+          {"field": "document", "label": "RUC / DNI", "legacy": "RUC / DNI"},
+          {"field": "business_name", "label": "Razón social", "legacy": "RAZON SOCIAL"},
+          {"field": "address", "label": "Dirección", "legacy": "DIRECCION"},
+          {"field": "phone", "label": "Teléfono", "legacy": "TELEFONO"}
+        ]},
+        "actions": [
+          {"label": "Guardar cliente", "legacy": "GRABAR", "action": "save"},
+          {"label": "Limpiar", "legacy": "LIMPIAR", "action": "clear"}
+        ],
+        "validations": [
+          {"field": "document", "check": "required", "code": "0x0042", "message": "CAMPO OBLIGATORIO", "rule": 2}
+        ],
+        "success": {"message": "OPERACION COMPLETADA SATISFACTORIAMENTE."},
+        "error_style": "inline", "success_style": "toast",
+        "enforces": [2, 3]
+      },
+      {
+        "id": "busqueda-de-facturas", "legacy": "BUSQUEDA DE FACTURAS", "kind": "search", "title": "Facturas",
+        "entity": "invoice",
+        "filters": [
+          {"name": "number", "label": "N.º de factura", "legacy": "NRO. FACTURA", "field": "number", "op": "contains", "input": "text"},
+          {"name": "customer", "label": "Cliente", "legacy": "CLIENTE", "field": "customer", "op": "eq", "input": "select"},
+          {"name": "status", "label": "Estado", "legacy": "ESTADO", "field": "status", "op": "eq", "input": "select"},
+          {"name": "from", "label": "Desde", "legacy": "FECHA DESDE", "field": "date", "op": "from", "input": "date"},
+          {"name": "to", "label": "Hasta", "legacy": "FECHA HASTA", "field": "date", "op": "to", "input": "date"}
+        ],
+        "table": {"legacy": "RESULTADOS", "label": "Resultados", "selectable": true, "columns": [
+          {"field": "number", "label": "N.º de factura", "legacy": "NRO. FACTURA"},
+          {"field": "date", "label": "Fecha", "legacy": "FECHA"},
+          {"field": "customer.business_name", "label": "Cliente", "legacy": "CLIENTE"},
+          {"field": "total", "label": "Total", "legacy": "TOTAL"},
+          {"field": "balance", "label": "Saldo", "legacy": "SALDO"},
+          {"field": "status", "label": "Estado", "legacy": "ESTADO"}
+        ]},
+        "actions": [
+          {"label": "Buscar", "legacy": "BUSCAR", "action": "search"},
+          {"label": "Limpiar", "legacy": "LIMPIAR", "action": "clear"},
+          {"label": "Registrar pago", "legacy": "REGISTRAR PAGO", "action": "open", "target": "registrar-pago", "requires_selection": true}
+        ],
+        "enforces": [4, 5]
+      },
+      {
+        "id": "registrar-pago", "legacy": "REGISTRAR PAGO", "kind": "transaction", "title": "Registrar pago",
+        "entity": "payment", "parent": "invoice", "parent_lookup": "number",
+        "shown": [
+          {"name": "number", "label": "N.º de factura", "legacy": "NRO. FACTURA", "input": "text"},
+          {"name": "customer", "label": "Cliente", "legacy": "CLIENTE", "input": "readonly"},
+          {"name": "date", "label": "Emisión", "legacy": "FECHA EMISION", "input": "readonly"},
+          {"name": "total", "label": "Total", "legacy": "TOTAL", "input": "readonly"},
+          {"name": "balance", "label": "Saldo pendiente", "legacy": "SALDO PENDIENTE", "input": "readonly"},
+          {"name": "status", "label": "Estado", "legacy": "ESTADO", "input": "readonly"}
+        ],
+        "fields": [
+          {"name": "amount", "label": "Monto", "legacy": "MONTO S/", "input": "money"},
+          {"name": "date", "label": "Fecha de pago", "legacy": "FECHA PAGO", "input": "date", "default": "today"},
+          {"name": "method", "label": "Método", "legacy": "METODO", "input": "radio", "default": "EFECTIVO"},
+          {"name": "operation", "label": "N.º de operación", "legacy": "NRO. OPERACION", "input": "text"}
+        ],
+        "actions": [
+          {"label": "Buscar", "legacy": "BUSCAR", "action": "lookup"},
+          {"label": "Guardar pago", "legacy": "GRABAR", "action": "save"},
+          {"label": "Cancelar", "legacy": "CANCELAR", "action": "cancel", "target": "busqueda-de-facturas"}
+        ],
+        "validations": [
+          {"field": "amount", "check": "required", "code": "0x0042", "message": "CAMPO OBLIGATORIO", "rule": 2},
+          {"field": "amount", "check": "not_above", "other": "invoice.balance", "code": "0x00A4", "message": "MONTO EXCEDE SALDO PENDIENTE", "rule": 7}
+        ],
+        "effects": [
+          {"target": "invoice.balance", "expr": "invoice.balance - payment.amount"},
+          {"target": "invoice.status", "cases": [
+            {"when": "invoice.balance <= 0", "value": "PAGADA"},
+            {"when": "invoice.balance < invoice.total", "value": "PARCIAL"}
+          ], "default": "PENDIENTE"}
+        ],
+        "success": {"message": "OPERACION COMPLETADA SATISFACTORIAMENTE.", "goto": "busqueda-de-facturas", "with_parent": true},
+        "error_style": "inline", "success_style": "toast",
+        "embedded_in": "busqueda-de-facturas",
+        "enforces": [6, 7]
+      }
+    ],
+    "changes": []
+  },
+  "seed": {
+    "customer": [
+      {"document": "20600111222", "business_name": "INVERSIONES TAMBOPATA S.A.C.", "address": "AV. LEON VELARDE 845 - PUERTO MALDONADO", "phone": "082-571234"},
+      {"document": "20600333444", "business_name": "DISTRIBUIDORA LOS AMIGOS E.I.R.L.", "address": "JR. PUNO 312 - PUERTO MALDONADO", "phone": "082-572201"},
+      {"document": "20600555666", "business_name": "AGROINDUSTRIAS MADRE DE DIOS S.R.L.", "address": "CARRETERA INTEROCEANICA KM 4.5", "phone": "082-573380"},
+      {"document": "20600777888", "business_name": "TRANSPORTES RIO INAMBARI S.A.", "address": "AV. 28 DE JULIO 1020 - LABERINTO", "phone": "082-574415"},
+      {"document": "10456789012", "business_name": "QUISPE MAMANI ROSA ELENA", "address": "JR. AREQUIPA 155 - PUERTO MALDONADO", "phone": "982-114455"},
+      {"document": "20600999000", "business_name": "CONSTRUCTORA HUEPETUHE S.A.C.", "address": "AV. FITZCARRALD 640 - PUERTO MALDONADO", "phone": "082-575590"}
+    ],
+    "invoice": [
+      {"number": "F001-000104", "date": "12/09/2026", "customer": "INVERSIONES TAMBOPATA S.A.C.", "total": "S/ 875.00", "balance": "S/ 875.00", "status": "PENDIENTE"},
+      {"number": "F001-000110", "date": "09/10/2026", "customer": "INVERSIONES TAMBOPATA S.A.C.", "total": "S/ 640.00", "balance": "S/ 640.00", "status": "PENDIENTE"},
+      {"number": "F001-000115", "date": "24/10/2026", "customer": "INVERSIONES TAMBOPATA S.A.C.", "total": "S/ 1,900.80", "balance": "S/ 1,900.80", "status": "PENDIENTE"}
+    ],
+    "payment": []
+  }
+}
