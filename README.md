@@ -27,7 +27,8 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 | App antigua de ejemplo (`legacy-demo/`) | Lista |
 | Configuración de proveedor (Baseten / Fireworks) | Lista |
 | Agente 1: pantallas | Listo: 100 % de acierto en el video de ejemplo |
-| Agentes 2 a 4 | En desarrollo |
+| Agente 2: flujos | Listo: 29/29 pasos, 11/11 valores, 4/4 flujos y 7/7 reglas en el video de ejemplo |
+| Agentes 3 y 4 | En desarrollo |
 
 ## Tecnologías
 
@@ -73,6 +74,13 @@ Agente 1, pantallas (requiere ffmpeg). Analiza el video y guarda `runs/<id>/scre
 ```
 uv run python -m rewind screens samples/facturacion-demo.mp4
 uv run python scripts/eval_screens.py     # % de acierto contra samples/facturacion-demo.expected.json
+```
+
+Agente 2, flujos. Lee esa corrida y guarda `runs/<id>/flows.json`: los pasos del usuario, los flujos de negocio y las reglas. Los valores que leyó mal se marcan con confianza baja en vez de darse por buenos:
+
+```
+uv run python -m rewind flows runs/<id>
+uv run python scripts/eval_flows.py       # % de pasos, valores, flujos y reglas
 ```
 
 Pruebas sin llamadas al modelo:

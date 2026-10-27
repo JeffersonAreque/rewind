@@ -26,7 +26,8 @@ More detail in [docs/arquitectura.md](docs/arquitectura.md) (Spanish).
 | Sample legacy app (`legacy-demo/`) | Done |
 | Provider config (Baseten / Fireworks) | Done |
 | Agent 1: screens | Done: 100% accuracy on the sample video |
-| Agents 2 to 4 | In progress |
+| Agent 2: flows | Done: 29/29 steps, 11/11 values, 4/4 workflows and 7/7 rules on the sample video |
+| Agents 3 and 4 | In progress |
 
 ## Stack
 
@@ -72,6 +73,13 @@ Agent 1, screens (needs ffmpeg). Reads the video and writes `runs/<id>/screens.j
 ```
 uv run python -m rewind screens samples/facturacion-demo.mp4
 uv run python scripts/eval_screens.py     # accuracy against samples/facturacion-demo.expected.json
+```
+
+Agent 2, flows. Reads that run and writes `runs/<id>/flows.json`: the user's steps, the business workflows and the business rules. Misread values are flagged as low confidence instead of trusted:
+
+```
+uv run python -m rewind flows runs/<id>
+uv run python scripts/eval_flows.py       # % of steps, values, workflows and rules
 ```
 
 Tests that make no model calls:
