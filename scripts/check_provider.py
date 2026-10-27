@@ -17,21 +17,20 @@ Usage:
 
 import argparse
 import base64
-import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from openai import OpenAI, OpenAIError
+from openai import OpenAIError
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from rewind.config import load_provider  # noqa: E402
+from rewind.llm import make_client, split_reasoning  # noqa: E402
 
 VIDEO = ROOT / "samples" / "facturacion-demo.mp4"
-THINK = re.compile(r"^\s*(?:<think>)?(.*?)</think>\s*", re.DOTALL)
 
 TEXT_PROMPT = "Responde en una sola frase: ¿qué es un sistema de facturación?"
 VISION_PROMPT = (
@@ -39,22 +38,6 @@ VISION_PROMPT = (
     "qué pantalla es, la lista de campos (etiqueta y valor actual, indicando si es de "
     "solo lectura) y la lista de botones y opciones. Responde en español, en listas cortas."
 )
-
-
-def split_reasoning(message) -> tuple[str, str]:
-    """Return (reasoning, answer) from a chat message.
-
-    Providers return the reasoning either in a separate field
-    (reasoning_content / reasoning) or inline inside <think>...</think>.
-    """
-    extra = message.model_extra or {}
-    reasoning = extra.get("reasoning_content") or extra.get("reasoning") or ""
-    answer = message.content or ""
-    match = THINK.match(answer)
-    if match:
-        reasoning = reasoning or match.group(1)
-        answer = answer[match.end():]
-    return reasoning.strip(), answer.strip()
 
 
 def extract_frame(at: float) -> str:
@@ -104,7 +87,7 @@ def main() -> int:
         return 1
     print(f"Proveedor: {config.name} | modelo: {config.model}")
 
-    client = OpenAI(base_url=config.base_url, api_key=config.api_key)
+    client = make_client(config)
     try:
         text = client.chat.completions.create(
             model=config.model,
