@@ -11,10 +11,12 @@ Moderniza software antiguo a partir de un video, sin el código fuente. Grabas a
 
 ## Cómo funciona
 
-1. **Agente de pantallas**: extrae del video los cuadros clave, pantallas, campos y botones (SAM 3.1 + Muse Spark).
-2. **Agente de flujos**: reconstruye los flujos de trabajo paso a paso (Muse Spark).
+1. **Agente de pantallas**: extrae del video los cuadros clave, pantallas, campos, botones, tablas y diálogos.
+2. **Agente de flujos**: reconstruye los flujos de trabajo paso a paso.
 3. **Agente constructor**: genera una app web con las mismas pantallas y flujos.
 4. **Agente verificador**: repite cada flujo en la app nueva y la compara con el video original.
+
+**Muse Spark Open** (modelo de pesos abiertos de Meta, vía Baseten) es el núcleo y hace todo el trabajo. **SAM 3.1** es un complemento opcional que se activará solo si en el futuro hay acceso a la API de Meta; nada depende de él.
 
 Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 
@@ -23,12 +25,13 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 | Parte | Estado |
 |---|---|
 | App antigua de ejemplo (`legacy-demo/`) | Lista |
-| Configuración de proveedor (Fireworks / Baseten) | Lista |
-| Agentes 1 a 4 | En desarrollo |
+| Configuración de proveedor (Baseten / Fireworks) | Lista |
+| Agente 1: pantallas | Listo: 100 % de acierto en el video de ejemplo |
+| Agentes 2 a 4 | En desarrollo |
 
 ## Tecnologías
 
-Python 3.12 · uv · Flask · SQLite · 98.css · Muse Spark (vía Fireworks o Baseten, API compatible con OpenAI)
+Python 3.12 · uv · Muse Spark Open (vía Baseten o Fireworks, API compatible con OpenAI) · ffmpeg · numpy · pydantic · Flask · SQLite · 98.css
 
 ## Instalación
 
@@ -65,14 +68,28 @@ Probar el proveedor con una llamada de texto y otra de visión (un cuadro del vi
 uv run python scripts/check_provider.py
 ```
 
+Agente 1, pantallas (requiere ffmpeg). Analiza el video y guarda `runs/<id>/screens.json` más los cuadros clave; con `--dry-run` solo extrae los cuadros, sin gastar créditos:
+
+```
+uv run python -m rewind screens samples/facturacion-demo.mp4
+uv run python scripts/eval_screens.py     # % de acierto contra samples/facturacion-demo.expected.json
+```
+
+Pruebas sin llamadas al modelo:
+
+```
+uv run pytest
+```
+
 ## Estructura
 
 ```
 legacy-demo/   app antigua de ejemplo (Flask + SQLite + 98.css)
 rewind/        pipeline de agentes en Python
 docs/          arquitectura y guía de grabación
-samples/       videos de entrada
-scripts/       grabación automática del video de demo y prueba del proveedor
+samples/       video de entrada y respuestas esperadas
+scripts/       grabación del video, prueba del proveedor y prueba de precisión
+tests/         pruebas sin API
 ```
 
 ## Autor
