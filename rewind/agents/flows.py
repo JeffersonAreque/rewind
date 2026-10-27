@@ -12,14 +12,16 @@ groups the steps into workflows and infers the rules.
 """
 
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from rewind.agents.screens import FrameAnalysis
+from rewind.agents.screens import FrameAnalysis, normalize
 from rewind.config import ROOT
 from rewind.llm import TokenCount, ask_json, cache_key, cached, image_url
 
@@ -142,3 +144,89 @@ def read_pairs(client: OpenAI, model: str, frames: list[dict], run_dir: Path, wo
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(one, range(len(frames) - 1)))
+
+
+# ---------- Steps ----------
+
+ERROR_CODE = re.compile(r"0x[0-9A-F]{2,8}", re.IGNORECASE)
+SIMILAR = 0.8  # difflib ratio from which two readings count as the same value misread
+
+
+class Step(BaseModel):
+    n: int = 0
+    screen: str
+    action: Literal["open_screen", "type", "click", "select", "see_message"]
+    target: str = Field(description="field, button, menu, table, screen name or message text")
+    element: str | None = None  # field/button/menu/radio/list/row, or the message kind
+    value: str | None = None
+    value_visible: bool = True
+    code: str | None = None  # error code of a message, e.g. 0x0042
+    frame_from: int
+    frame_to: int
+    time_from: float
+    time_to: float
+    readings: list[dict] = Field(default_factory=list)  # every reading of the value: {"source", "value"}
+    confidence: Literal["high", "medium", "low", "masked", "none"] = "none"
+    variants: list[str] = Field(default_factory=list)  # readings that disagree with the chosen value
+
+
+def similar(a: str, b: str) -> bool:
+    return SequenceMatcher(None, normalize(a), normalize(b)).ratio() >= SIMILAR
+
+
+def find_reread(steps: list[Step], action, screen: str) -> Step | None:
+    """The earlier step this action repeats, if any.
+
+    A field still being filled shows up in two pairs (half typed, or misread
+    once): same screen visit, same target, a similar value and no click in
+    between. Those are one step with two readings, not two steps.
+    """
+    for step in reversed(steps):
+        if step.action in ("open_screen", "click", "see_message"):
+            return None
+        if (step.screen == screen and step.action == action.action
+                and normalize(step.target) == normalize(action.target)
+                and (not step.value or not action.value or similar(step.value, action.value))):
+            return step
+    return None
+
+
+def build_steps(frames: list[dict], pairs: list[dict]) -> list[Step]:
+    """Ordered user steps: the model's actions for each pair plus the facts Agent 1
+    already knows (screen changes and messages), which need no guessing."""
+    first = frames[0]
+    steps = [Step(
+        screen=first["analysis"].screen_name, action="open_screen", target=first["analysis"].screen_name,
+        frame_from=first["index"], frame_to=first["index"], time_from=first["time"], time_to=first["time"],
+    )]
+    by_index = {f["index"]: f for f in frames}
+    for pair in pairs:
+        before, after = by_index[pair["from"]]["analysis"], by_index[pair["to"]]["analysis"]
+        where = {"frame_from": pair["from"], "frame_to": pair["to"],
+                 "time_from": pair["time_from"], "time_to": pair["time_to"]}
+        source = f"pair {pair['from']}->{pair['to']}"
+
+        for action in pair["analysis"].actions if "analysis" in pair else []:
+            reading = [{"source": source, "value": action.value}] if action.value else []
+            if action.action in ("type", "select") and (earlier := find_reread(steps, action, before.screen_name)):
+                earlier.readings += reading
+                earlier.value = action.value or earlier.value  # the later reading saw more of the value
+                earlier.frame_to, earlier.time_to = where["frame_to"], where["time_to"]
+                continue
+            steps.append(Step(
+                screen=before.screen_name, action=action.action, target=action.target, element=action.element,
+                value=action.value, value_visible=action.value_visible, readings=reading, **where,
+            ))
+
+        if normalize(after.screen_name) != normalize(before.screen_name):
+            steps.append(Step(screen=after.screen_name, action="open_screen", target=after.screen_name, **where))
+        if after.dialog and (not before.dialog or normalize(before.dialog.message) != normalize(after.dialog.message)):
+            code = ERROR_CODE.search(after.dialog.message)
+            steps.append(Step(
+                screen=after.screen_name, action="see_message", target=after.dialog.message,
+                element=after.dialog.kind, code=code.group(0) if code else None, **where,
+            ))
+
+    for n, step in enumerate(steps, 1):
+        step.n = n
+    return steps
