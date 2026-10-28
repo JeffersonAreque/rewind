@@ -23,7 +23,7 @@ video.mp4
 | Pantallas (`rewind/agents/screens.py`) | Video MP4 | `screens.json` + cuadros clave en PNG | Muse Spark Open (SAM 3.1 opcional) | Listo |
 | Flujos (`rewind/agents/flows.py`) | Corrida del agente de pantallas | `flows.json`: pasos, flujos y reglas | Muse Spark Open | Listo |
 | Constructor (`rewind/agents/builder.py`) | `screens.json` y `flows.json` | `app/`: app web moderna + pruebas por flujo | Muse Spark Open | Listo |
-| Verificador (`rewind/agents/verifier.py`) | App nueva, flujos y video | Comparación visual paso por paso | Muse Spark Open | Planificado |
+| Verificador (`rewind/agents/verifier.py`) | App nueva, flujos y video | `VERIFICATION.md`: comparación visual paso por paso | Muse Spark Open | Listo |
 
 ## Modelos
 
@@ -185,6 +185,46 @@ Resultado en el video de ejemplo:
 - **Valores iniciales:** los campos de un formulario nuevo empiezan como en la grabación (FECHA PAGO = hoy, METODO = EFECTIVO). El checker lo exige y la prueba lo comprueba al abrir la pantalla; si se quita EFECTIVO, la prueba del pago falla.
 - **Prueba de que las pruebas miden algo:** si se quita la fórmula del saldo, la prueba del pago falla en el paso 28 ("no muestra S/ 340.00"); si se quita el campo obligatorio, falla la del cliente.
 - **Costo:** unos 105 mil tokens (10 llamadas); repetir cuesta 0.
+
+## Agente 4: verificador
+
+```
+uv run python -m rewind verify runs/<id>
+```
+
+Las pruebas del constructor dicen si cada flujo llega al final. El verificador además mira cada paso y lo compara con el video.
+
+1. **Capturas.** Las pruebas de la app se repiten una vez por flujo, así que un fallo no oculta los demás flujos. Con `REWIND_EVIDENCE`, cada paso deja una captura de la app nueva (`evidence/new/step_NN.png`) y si se repitió bien. La imagen antigua de cada paso es su cuadro clave `frame_to`. Los pasos que solo preparan un flujo (iniciar sesión antes de pagar) no esperan mensajes: un mensaje roto falla en su propio flujo, no en los siguientes.
+2. **Comparación (Muse Spark Open, visión).** Una llamada por cada paso no absorbido (26 en el video de ejemplo), con las dos imágenes. Responde:
+   - `same_data`: los valores escritos o elegidos, las filas, montos, estado y saldo;
+   - `same_message`: el mismo mensaje, con su código, o ninguno;
+   - `same_outcome`: el mismo efecto (se guardó o no, la misma pantalla, el mismo botón habilitado);
+
+   cada uno con `pass`, `fail` o `unclear`, más la lista de diferencias. El estilo, la disposición, las etiquetas, la fecha de hoy y los 7 cambios de `CHANGES.md` (como la página unida) no cuentan. Si el cuadro clave se tomó después de pasos posteriores (varios pasos comparten un cuadro), el modelo los recibe y lo que cambiaron no cuenta como diferencia. Las respuestas se validan y se guardan en caché por el hash de las imágenes.
+3. **Veredictos (código, no el modelo).** Un paso pasa si se repitió bien y la comparación dice `pass`. Una regla pasa si todos sus pasos de evidencia pasan. `unclear` se muestra como advertencia, nunca como aprobado.
+4. **Salida.** `runs/<id>/verification.json` y `VERIFICATION.md`: tabla por paso y por regla, la imagen antigua y la nueva lado a lado, y las diferencias encontradas.
+
+Resultado en el video de ejemplo:
+- **24 pasos pasan, 0 fallan y 2 quedan dudosos**, más 3 absorbidos por cambios. Los dudosos son USUARIO y CLAVE: el video no tiene un cuadro del inicio de sesión lleno, porque el siguiente cuadro ya muestra la pantalla de clientes.
+- **10 de 10 reglas pasan.**
+- **Encontró dos diferencias reales** en la primera corrida, que se corrigieron en el runtime: la búsqueda de facturas mostraba todas las facturas antes de BUSCAR (la pantalla antigua empieza vacía) y el error 0x0042 seguía debajo de RUC / DNI después de llenarlo.
+- **Costo:** unos 175 mil tokens la primera vez (26 llamadas); repetir cuesta 0.
+
+### Prueba con copias rotas
+
+```
+uv run python scripts/eval_verifier.py
+```
+
+Verifica la app sana y 3 copias rotas en `runs/<id>/eval/`. La app sana no debe fallar ningún paso ni regla; cada copia debe fallar el paso donde se nota el daño y una regla sobre él. Si no, el script termina con error.
+
+| Copia | Paso que falla | Reglas que fallan |
+|---|---|---|
+| Sin la fórmula del saldo | 28 en la prueba (no muestra S/ 340.00); Muse Spark ya lo ve en los pasos 26 y 27 (S/ 640.00 en vez de S/ 340.00) | saldo, estado, cálculo y regreso a la búsqueda |
+| Sin el campo obligatorio | 7 en la prueba (no sale 0x0042); Muse Spark ya lo ve en el paso 6 (sale el aviso de éxito en vez del error) | RUC / DNI obligatorio y cliente nuevo |
+| Sin EFECTIVO | 22 en la prueba (METODO empieza vacío); Muse Spark ya lo ve en el paso 21 | abrir REGISTRAR PAGO y las del pago |
+
+Las copias solo pagan las capturas que cambian: unos 34 mil tokens en total. Repetir cuesta 0.
 
 ## Proveedor de modelos
 

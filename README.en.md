@@ -30,7 +30,7 @@ More detail in [docs/arquitectura.md](docs/arquitectura.md) (Spanish).
 | Agent 1: screens | Done: 100% accuracy on the sample video |
 | Agent 2: flows | Done: 29/29 steps, 11/11 values, 4/4 workflows and 7/7 rules on the sample video |
 | Agent 3: builder | Done: modern app with 7 justified changes; 4/4 workflows replayed successfully |
-| Agent 4: verifier | In progress |
+| Agent 4: verifier | Done: 24/26 steps pass, 2 unclear, 10/10 rules; catches 3 of 3 broken copies of the app |
 
 ## Stack
 
@@ -90,6 +90,13 @@ Agent 3, builder. Generates the modern app in `runs/<id>/app/` and replays the r
 ```
 uv run python -m rewind build runs/<id>
 uv run python runs/<id>/app/app.py        # http://127.0.0.1:5001 (user ADMIN; the password is printed on first start)
+```
+
+Agent 4, verifier. Replays each workflow in the new app with a screenshot after every step, and Muse Spark compares each one with the matching keyframe of the video. `VERIFICATION.md` shows a pass/fail table per step and per rule, with the old and new images side by side and the differences found:
+
+```
+uv run python -m rewind verify runs/<id>
+uv run python scripts/eval_verifier.py    # must catch 3 broken copies of the app
 ```
 
 Tests that make no model calls:

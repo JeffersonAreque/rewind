@@ -31,7 +31,7 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 | Agente 1: pantallas | Listo: 100 % de acierto en el video de ejemplo |
 | Agente 2: flujos | Listo: 29/29 pasos, 11/11 valores, 4/4 flujos y 7/7 reglas en el video de ejemplo |
 | Agente 3: constructor | Listo: app moderna con 7 cambios justificados; 4/4 flujos repetidos con éxito |
-| Agente 4: verificador | En desarrollo |
+| Agente 4: verificador | Listo: 24/26 pasos pasan, 2 dudosos, 10/10 reglas; detecta 3 de 3 copias rotas de la app |
 
 ## Tecnologías
 
@@ -91,6 +91,13 @@ Agente 3, constructor. Genera la app moderna en `runs/<id>/app/` y repite en ell
 ```
 uv run python -m rewind build runs/<id>
 uv run python runs/<id>/app/app.py        # http://127.0.0.1:5001 (usuario ADMIN; la clave se muestra al primer inicio)
+```
+
+Agente 4, verificador. Repite cada flujo en la app nueva con una captura después de cada paso, y Muse Spark compara cada captura con el cuadro clave del video. `VERIFICATION.md` muestra una tabla de pasa/falla por paso y por regla, con la imagen antigua y la nueva lado a lado y las diferencias encontradas:
+
+```
+uv run python -m rewind verify runs/<id>
+uv run python scripts/eval_verifier.py    # debe detectar 3 copias rotas de la app
 ```
 
 Pruebas sin llamadas al modelo:
