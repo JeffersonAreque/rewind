@@ -107,6 +107,33 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 0 if all(t["passed"] for t in report["tests"]) else 1
 
 
+def cmd_verify(args: argparse.Namespace) -> int:
+    from rewind.agents import verifier
+
+    app = args.app or args.run / "app"
+    if not (args.run / "flows.json").is_file() or not (app / "spec.json").is_file():
+        raise ValueError(f"{args.run} needs flows.json and a built app; run the flows and build commands first")
+    path = verifier.run(args.run, app, provider=args.provider, workers=args.workers)
+
+    report = json.loads(path.read_text(encoding="utf-8"))
+    s, r = report["summary"]["steps"], report["summary"]["rules"]
+    print(f"\nSteps: {s['pass']} pass, {s['fail']} fail, {s['unclear']} unclear, {s['absorbed']} absorbed by changes")
+    for st in report["steps"]:
+        if st["verdict"] in ("fail", "unclear"):
+            why = st["replay_error"] or "; ".join((st["comparison"] or {}).get("differences", [])) or st["comparison_error"]
+            print(f"  [{'--' if st['verdict'] == 'fail' else '??'}] step {st['n']} {st['action']} "
+                  f"{' '.join(st['target'].split())}: {why}")
+    print(f"Rules: {r['pass']} pass, {r['fail']} fail, {r['unclear']} unclear")
+    for rule in report["rules"]:
+        mark = {"pass": "ok", "fail": "--", "unclear": "??"}[rule["verdict"]]
+        print(f"  [{mark}] {rule['n']}. {rule['description']}")
+    tokens = report["tokens"]
+    print(f"Tokens this run: {tokens['total']} ({tokens['reasoning']} reasoning, {tokens['calls']} calls); "
+          f"{report['cached_calls']} comparisons from cache")
+    print(f"\n{path.with_name('VERIFICATION.md')}")
+    return 1 if s["fail"] or r["fail"] else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="rewind", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -139,6 +166,13 @@ def main() -> int:
     build.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
     build.add_argument("--no-test", action="store_true", help="do not run the replay tests after building")
     build.set_defaults(func=cmd_build)
+
+    verify = commands.add_parser("verify", help="verifier agent: replay the workflows and compare each step with the video")
+    verify.add_argument("run", type=Path, help="run folder with flows.json and app/ (runs/<id>)")
+    verify.add_argument("--app", type=Path, help="app folder to verify (default runs/<id>/app)")
+    verify.add_argument("--provider", choices=PROVIDERS, help="override REWIND_PROVIDER")
+    verify.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
+    verify.set_defaults(func=cmd_verify)
 
     args = parser.parse_args()
     try:
