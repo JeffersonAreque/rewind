@@ -332,7 +332,10 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
             if f["input"] == "date" and value:
                 value, _ = parse_value(spec, screen["entity"], {"type": "date"}, value)
             query[f["name"]] = value
-        return {"screen": screen, "filters": filters, "rows": rows(screen, query), "selected": args.get("sel", "")}
+        # Like the legacy screen, the results stay empty until a search runs (or a record is open).
+        searched = any(f["name"] in args for f in screen.get("filters", [])) or args.get("sel")
+        return {"screen": screen, "filters": filters, "rows": rows(screen, query) if searched else [],
+                "selected": args.get("sel", "")}
 
     def panel_for(screen: dict) -> dict | None:
         """The transaction screen merged into this search page, if any."""

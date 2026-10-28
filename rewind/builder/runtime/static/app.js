@@ -29,6 +29,16 @@ document.addEventListener("DOMContentLoaded", () => {
     dialog.addEventListener("keydown", (event) => { if (event.key === "Escape") close(); });
   });
 
+  // An inline error leaves as soon as its field is edited.
+  document.querySelectorAll(".field.has-error").forEach((field) => {
+    field.addEventListener("input", () => {
+      field.classList.remove("has-error");
+      field.querySelector(".field-error")?.remove();
+      field.querySelector("[aria-invalid]")?.removeAttribute("aria-invalid");
+      if (!document.querySelector(".field.has-error")) document.querySelector("[data-field-errors]")?.remove();
+    }, { once: true });
+  });
+
   // Toasts leave on their own.
   document.querySelectorAll(".toast").forEach((toast) => setTimeout(() => toast.classList.add("hide"), 6000));
 });

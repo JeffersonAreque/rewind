@@ -81,6 +81,7 @@ def test_create_customer(client):
 
 
 def test_search_filters_and_selection_button(client):
+    assert text(client.get("/p/busqueda-de-facturas")).count('<tr data-id=') == 0  # empty until a search runs
     page = text(client.get("/p/busqueda-de-facturas?customer=1&status=PENDIENTE"))
     assert page.count('<tr data-id=') == 3
     assert re.search(r'data-legacy="REGISTRAR PAGO"[^>]*disabled', page)

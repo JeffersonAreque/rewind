@@ -36,7 +36,7 @@
 {% set field_errors = errors|dictsort|rejectattr(0, 'equalto', '_')|list %}
 {% if field_errors %}
   {% if screen.error_style == 'inline' %}
-  <p class="alert" role="alert">Revise {{ 'el campo marcado' if field_errors|length == 1 else 'los campos marcados' }}.</p>
+  <p class="alert" role="alert" data-field-errors>Revise {{ 'el campo marcado' if field_errors|length == 1 else 'los campos marcados' }}.</p>
   {% else %}
   {% set name, text = field_errors[0] %}
   <dialog class="dialog" open aria-labelledby="err-text">
