@@ -3,15 +3,21 @@
 Same file in every generated app. The steps come from steps.json, which
 Rewind writes from flows.json: every element is found by its legacy label
 (data-legacy) so the test speaks the language of the original recording.
+
+When REWIND_EVIDENCE names a folder (the verifier sets it), every step of the
+workflow leaves a screenshot of the app (step_NN.png) and whether it replayed
+(step_NN.json) there.
 """
 
 import json
+import os
 import re
 from datetime import date
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TIMEOUT = 5000  # ms to wait for an element, a message or a value
+EVIDENCE = os.environ.get("REWIND_EVIDENCE")
 
 # Same normalization as Rewind: capitals, no accents, no colons, single spaces, no trailing dot.
 NORMALIZE = r"""s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
@@ -127,11 +133,23 @@ def check(page, c: dict) -> None:
             raise StepFailed(f"button {c['button']!r} should be {'enabled' if c['enabled'] else 'disabled'}")
 
 
+def record(page, n: int, error: str | None = None) -> None:
+    """Screenshot of the app after step n and whether it replayed, for the verifier."""
+    if not EVIDENCE:
+        return
+    folder = Path(EVIDENCE)
+    folder.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=folder / f"step_{n:02d}.png", animations="disabled")
+    (folder / f"step_{n:02d}.json").write_text(json.dumps({"n": n, "error": error}), encoding="utf-8")
+
+
 def replay(page, app: dict, steps: list[dict], first: int, last: int) -> dict:
     """Replay steps 1..last; steps first..last are this workflow's and are checked.
 
     Earlier steps only bring the app to where the workflow starts (for example,
-    paying an invoice needs the login and the search). Returns what was done.
+    paying an invoice needs the login and the search). They wait for no
+    message, so a broken message fails its own workflow, not the later ones.
+    Returns what was done.
     """
     page.goto(app["url"] + "/login")
     done = {"replayed": [], "absorbed": []}
@@ -146,11 +164,16 @@ def replay(page, app: dict, steps: list[dict], first: int, last: int) -> dict:
             if step.get("absorbed"):
                 done["absorbed"].append(step["n"])
                 continue
-            do(page, step, app["password"])
+            if mine or step["action"] != "see_message":
+                do(page, step, app["password"])
             for c in step.get("after", []) if mine else []:
                 check(page, c)
         except StepFailed as exc:
             context = "" if mine else f"while preparing (this workflow starts at step {first}), "
-            raise StepFailed(f"{context}{where}: {exc}") from None
+            message = f"{context}{where}: {exc}"
+            record(page, step["n"] if mine else first, message)
+            raise StepFailed(message) from None
+        if mine:
+            record(page, step["n"])
         done["replayed"].append(step["n"])
     return done

@@ -13,6 +13,7 @@ Then code copies the runtime, writes the tests from flows.json and runs them.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -311,13 +312,13 @@ printed on the first start. `CHANGES.md` lists what changed from the legacy inte
 # ---------- E. Run the replay tests ----------
 
 
-def run_tests(app_dir: Path) -> list[dict]:
-    """Run tests/ of the app and return one result per test."""
+def run_tests(app_dir: Path, env: dict[str, str] | None = None) -> list[dict]:
+    """Run tests/ of the app (with extra environment variables) and return one result per test."""
     with tempfile.TemporaryDirectory() as tmp:
         report = Path(tmp) / "junit.xml"
         done = subprocess.run(
             [sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", f"--junitxml={report}"],
-            cwd=app_dir.resolve(), capture_output=True, text=True,
+            cwd=app_dir.resolve(), capture_output=True, text=True, env=os.environ | (env or {}),
         )
         if not report.exists() or not list(ET.parse(report).getroot().iter("testcase")):
             output = (done.stdout + done.stderr).strip().splitlines()
