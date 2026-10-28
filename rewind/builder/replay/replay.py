@@ -111,6 +111,16 @@ def check(page, c: dict) -> None:
         wait_for(page, PAGE_HAS, c["texts"], f"page does not show {c['texts']}")
     elif c["kind"] == "row_count":
         wait_for(page, ROW_COUNT, [c["table"], c["count"]], f"table {c['table']!r} does not have {c['count']} rows")
+    elif c["kind"] == "default":
+        element = find(page, c["field"])
+        shown = element.evaluate(
+            """e => e.tagName === 'FIELDSET'
+                 ? ([...e.querySelectorAll('input:checked')].map(i => i.closest('label').innerText)[0] || '')
+                 : e.tagName === 'SELECT' ? (e.selectedOptions[0] ? e.selectedOptions[0].text : '') : e.value""")
+        wanted = date.today().isoformat() if c["value"] == "today" else c["value"]
+        normalize = lambda s: " ".join(str(s).upper().split())  # noqa: E731
+        if normalize(shown) != normalize(wanted):
+            raise StepFailed(f"{c['field']!r} starts with {shown!r}; the legacy screen started with {c['value']!r}")
     elif c["kind"] == "button":
         disabled = find(page, c["button"]).is_disabled()
         if disabled == c["enabled"]:

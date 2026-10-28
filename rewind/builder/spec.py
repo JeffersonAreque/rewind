@@ -190,6 +190,28 @@ def legacy_elements(screen: dict) -> dict[str, set[str]]:
     }
 
 
+PLACEHOLDER = re.compile(r"^[\[(].*[\])]$|^[DMAY/ -]+$")  # (TODOS), [TODAS], DD/MM/AAAA
+DATE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
+
+
+def legacy_defaults(frames: list[dict], screen_name: str) -> dict[str, str]:
+    """Values the legacy screen started with: editable fields filled in the first frame of the
+    screen (before the user typed anything there). Placeholders like DD/MM/AAAA are not values."""
+    for frame in frames:
+        a = frame["analysis"]
+        if normalize(a.screen_name) == normalize(screen_name):
+            return {f.label: f.value for s in a.sections for f in s.fields
+                    if f.editable and f.value and not PLACEHOLDER.match(normalize(f.value))}
+    return {}
+
+
+def same_default(default: str | None, legacy: str) -> bool:
+    """A legacy date in a new-record form is the date of the recording: today."""
+    if DATE.match(legacy):
+        return default == "today"
+    return default is not None and normalize(default) == normalize(legacy)
+
+
 def removed(changes: list[Change], screen: str) -> set[str]:
     return {normalize(c.element) for c in changes
             if c.kind == "remove_element" and c.element and normalize(screen) in map(normalize, c.screens)}
@@ -331,9 +353,21 @@ def absorbed_steps(steps: list[dict], styles: dict[str, tuple[str, str]]) -> dic
 
 
 def check_screen(spec: ScreenSpec, screen: dict, model: DataModel, mod: Modernization,
-                 steps: list[dict], rules: list[dict], screen_names: list[str]) -> list[str]:
-    """Everything a screen spec must satisfy before the runtime can use it."""
+                 steps: list[dict], rules: list[dict], screen_names: list[str],
+                 defaults: dict[str, str] | None = None) -> list[str]:
+    """Everything a screen spec must satisfy before the runtime can use it.
+
+    defaults: values the legacy screen started with (legacy_defaults); form fields keep
+    them unless a change names the field.
+    """
     problems = []
+    changed = {normalize(c.element) for c in mod.changes
+               if c.element and normalize(spec.legacy) in map(normalize, c.screens)}
+    for f in spec.fields:
+        legacy_value = next((v for label, v in (defaults or {}).items() if normalize(label) == normalize(f.legacy)), None)
+        if legacy_value and normalize(f.legacy) not in changed and not same_default(f.default, legacy_value):
+            wanted = "'today'" if DATE.match(legacy_value) else repr(legacy_value)
+            problems.append(f"field {f.legacy!r} started with {legacy_value!r} on the legacy screen: its default must be {wanted}")
     entities = {e.name: {f.name: f for f in e.fields} for e in model.entities}
     known_screens = {normalize(n) for n in screen_names}
     if normalize(spec.legacy) != normalize(screen["name"]):
@@ -464,6 +498,24 @@ def check_screen(spec: ScreenSpec, screen: dict, model: DataModel, mod: Moderniz
         if normalize(step["target"]) not in targets and not dialog_button:
             problems.append(f"step {step['n']} ({step['action']} {step['target']}) has no element on this screen")
     return problems
+
+
+def is_noop(change: Change, specs: list[ScreenSpec], defaults: dict[str, dict[str, str]]) -> bool:
+    """A change that leaves the legacy behaviour as it was (e.g. a default the legacy screen already had)."""
+    if not change.element:
+        return False
+    for spec in (s for s in specs if normalize(s.legacy) in map(normalize, change.screens)):
+        items = [*spec.fields, *spec.shown, *spec.filters, *spec.actions, *(spec.table.columns if spec.table else [])]
+        element = next((x for x in items if normalize(x.legacy) == normalize(change.element)), None)
+        if element is None:
+            continue
+        if change.kind == "rename_label":
+            return normalize(element.label) == normalize(element.legacy)
+        if change.kind == "default_value":
+            legacy = {normalize(k): v for k, v in defaults.get(normalize(spec.legacy), {}).items()}
+            return normalize(element.legacy) in legacy and same_default(getattr(element, "default", None),
+                                                                       legacy[normalize(element.legacy)])
+    return False
 
 
 def coverage(spec: ScreenSpec, screen: dict, changes: list[Change]) -> dict:

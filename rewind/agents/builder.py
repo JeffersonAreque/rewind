@@ -386,6 +386,8 @@ def run(run_dir: Path, provider: str | None = None, run_tests_after: bool = True
                "modernization")["analysis"]
 
     # B3. One spec per legacy screen
+    defaults = {normalize(n): S.legacy_defaults(frames, n) for n in names}
+
     def screen_call(screen: dict) -> dict:
         own_steps = [s for s in flows["steps"] if normalize(s["screen"]) == normalize(screen["name"])]
         evidence = json.dumps({
@@ -396,14 +398,20 @@ def run(run_dir: Path, provider: str | None = None, run_tests_after: bool = True
         }, ensure_ascii=False)
         evidence += "\n\nSTEPS ON THIS SCREEN\n" + numbered_steps(own_steps)
         evidence += "\n\nALL STEPS\n" + numbered_steps(flows["steps"]) + "\n\nRULES\n" + numbered_rules(flows["rules"])
+        own_defaults = defaults[normalize(screen["name"])]
         return call(client, model, SCREEN_PROMPT, evidence, S.ScreenSpec,
-                    lambda s: "\n".join(S.check_screen(s, screen, data_model, mod, flows["steps"], flows["rules"], names)) or None)
+                    lambda s: "\n".join(S.check_screen(s, screen, data_model, mod, flows["steps"], flows["rules"],
+                                                       names, own_defaults)) or None)
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(screen_call, legacy_screens))
     specs = [done(r, f"screen {s['name']}")["analysis"] for r, s in zip(results, legacy_screens)]
 
-    # C. App folder
+    # C. App folder. A change that leaves the legacy behaviour as it was is not a change.
+    noop = [c for c in mod.changes if S.is_noop(c, specs, defaults)]
+    mod = mod.model_copy(update={"changes": [c for c in mod.changes if c not in noop]})
+    for c in noop:
+        log(f"  dropped no-op change: {c.kind} {c.element} (the legacy screen already did that)")
     app_spec = assemble(data_model, mod, specs, flows)
     seed = seed_records(data_model, tables, rows)
     app_dir = run_dir / "app"
@@ -414,7 +422,7 @@ def run(run_dir: Path, provider: str | None = None, run_tests_after: bool = True
     (app_dir / "seed.json").write_text(json.dumps(seed, ensure_ascii=False, indent=1), encoding="utf-8")
 
     # D. Replay tests
-    steps = write_tests(app_dir, flows, app_spec)
+    steps = write_tests(app_dir, flows, app_spec, defaults)
     cover = {s.legacy: S.coverage(s, screen, mod.changes) for s, screen in zip(specs, legacy_screens)}
     (app_dir / "CHANGES.md").write_text(changes_report(app_spec, flows, steps, cover), encoding="utf-8")
     (app_dir / "README.md").write_text(APP_README.format(
@@ -438,6 +446,7 @@ def run(run_dir: Path, provider: str | None = None, run_tests_after: bool = True
         "model": model,
         "coverage": cover,
         "changes": len(app_spec["changes"]),
+        "dropped_noop_changes": [c.model_dump() for c in noop],
         "unclaimed_rules": S.check_rules_enforced(specs, flows["rules"]),
         "steps": len(steps),
         "absorbed_steps": [s["n"] for s in steps if s.get("absorbed")],

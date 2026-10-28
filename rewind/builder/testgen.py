@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 
 from rewind.agents.screens import normalize
-from rewind.builder.spec import absorbed_steps, slug
+from rewind.builder.spec import DATE, absorbed_steps, slug
 
 TEMPLATE = Path(__file__).resolve().parent / "replay"
 COUNT = re.compile(r"^\s*(\d+)")
@@ -38,14 +38,35 @@ def observation_checks(observation: dict) -> list[dict]:
     return []
 
 
-def replay_steps(flows: dict, spec: dict) -> list[dict]:
+def default_checks(spec: dict, defaults: dict[str, dict[str, str]]) -> dict[str, list[dict]]:
+    """Per legacy screen: the values its form fields must start with, as in the recording.
+    A field whose default a listed change modernizes is left out (the change says why)."""
+    changed = {(normalize(s), normalize(c["element"])) for c in spec.get("changes", [])
+               if c["kind"] == "default_value" and c.get("element") for s in c["screens"]}
+    checks = {}
+    for screen in spec["screens"]:
+        legacy = {normalize(k): v for k, v in defaults.get(normalize(screen["legacy"]), {}).items()}
+        for f in screen.get("fields", []):
+            value = legacy.get(normalize(f["legacy"]))
+            if value and (normalize(screen["legacy"]), normalize(f["legacy"])) not in changed:
+                checks.setdefault(normalize(screen["legacy"]), []).append(
+                    {"kind": "default", "field": f["legacy"], "value": "today" if DATE.match(value) else value})
+    return checks
+
+
+def replay_steps(flows: dict, spec: dict, defaults: dict[str, dict[str, str]] | None = None) -> list[dict]:
     """The steps of steps.json: flows steps plus absorbed marks and checks."""
     steps = [dict(s) for s in flows["steps"]]
+    starts = default_checks(spec, defaults or {})
+    for s in steps:  # the first time a screen opens, its fields show the legacy starting values
+        if s["action"] == "open_screen" and normalize(s["target"]) in starts:
+            s["after"] = starts.pop(normalize(s["target"]))
     styles = {normalize(s["legacy"]): (s.get("error_style", "dialog"), s.get("success_style", "dialog"))
               for s in spec["screens"]}
     changes = {c["kind"]: i for i, c in enumerate(spec.get("changes", []), 1)}
+    by_n = {s["n"]: s for s in steps}
     for n, kind in absorbed_steps(steps, styles).items():
-        step = steps[n - 1]
+        step = by_n[n]
         number = changes.get(kind)
         step["absorbed"] = f"{kind} (change {number})" if number else kind
 
@@ -107,13 +128,13 @@ def module_source(flows: dict, steps: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_tests(app_dir: Path, flows: dict, spec: dict) -> list[dict]:
+def write_tests(app_dir: Path, flows: dict, spec: dict, defaults: dict[str, dict[str, str]] | None = None) -> list[dict]:
     """Write tests/ in the app folder. Returns the replay steps."""
     tests = app_dir / "tests"
     tests.mkdir(parents=True, exist_ok=True)
     for name in ("replay.py", "conftest.py"):
         shutil.copy(TEMPLATE / name, tests / name)
-    steps = replay_steps(flows, spec)
+    steps = replay_steps(flows, spec, defaults)
     (tests / "steps.json").write_text(json.dumps(steps, ensure_ascii=False, indent=1), encoding="utf-8")
     (tests / "test_workflows.py").write_text(module_source(flows, steps), encoding="utf-8")
     return steps

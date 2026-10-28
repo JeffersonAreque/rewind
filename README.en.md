@@ -29,7 +29,7 @@ More detail in [docs/arquitectura.md](docs/arquitectura.md) (Spanish).
 | Provider config (Baseten / Fireworks) | Done |
 | Agent 1: screens | Done: 100% accuracy on the sample video |
 | Agent 2: flows | Done: 29/29 steps, 11/11 values, 4/4 workflows and 7/7 rules on the sample video |
-| Agent 3: builder | Done: modern app with 8 justified changes; 4/4 workflows replayed successfully |
+| Agent 3: builder | Done: modern app with 7 justified changes; 4/4 workflows replayed successfully |
 | Agent 4: verifier | In progress |
 
 ## Stack

@@ -181,7 +181,8 @@ Si un chequeo falla, el error vuelve al modelo y la llamada se reintenta. Una re
 Resultado en el video de ejemplo:
 - **4/4 flujos pasan**, con 29 pasos, 3 de ellos absorbidos por los cambios.
 - **36 de 36 elementos antiguos** se conservan.
-- **8 cambios de modernización.**
+- **7 cambios de modernización.** Un cambio que deja todo igual que el programa antiguo no cuenta: "FECHA PAGO empieza con la fecha de hoy" se descartó porque la pantalla antigua ya lo hacía.
+- **Valores iniciales:** los campos de un formulario nuevo empiezan como en la grabación (FECHA PAGO = hoy, METODO = EFECTIVO). El checker lo exige y la prueba lo comprueba al abrir la pantalla; si se quita EFECTIVO, la prueba del pago falla.
 - **Prueba de que las pruebas miden algo:** si se quita la fórmula del saldo, la prueba del pago falla en el paso 28 ("no muestra S/ 340.00"); si se quita el campo obligatorio, falla la del cliente.
 - **Costo:** unos 105 mil tokens (10 llamadas); repetir cuesta 0.
 

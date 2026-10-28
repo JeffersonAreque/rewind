@@ -145,6 +145,46 @@ def test_removing_an_element_used_by_a_step_is_rejected():
     assert any("used by steps [4]" in p for p in problems)
 
 
+def test_legacy_defaults_skip_placeholders():
+    from rewind.agents.screens import FrameAnalysis
+    from rewind.builder.spec import legacy_defaults
+
+    analysis = FrameAnalysis.model_validate({"screen_name": "PAGO", "window_title": "PAGO", "sections": [{"fields": [
+        {"label": "FECHA PAGO", "value": "26/10/2026", "editable": True},
+        {"label": "METODO", "value": "EFECTIVO", "editable": True, "type": "radio"},
+        {"label": "DESDE", "value": "DD/MM/AAAA", "editable": True},
+        {"label": "CLIENTE", "value": "(TODOS)", "editable": True},
+        {"label": "TOTAL", "value": "S/ 640.00", "editable": False},
+    ]}]})
+    frames = [{"analysis": analysis}]
+    assert legacy_defaults(frames, "PAGO") == {"FECHA PAGO": "26/10/2026", "METODO": "EFECTIVO"}
+
+
+def test_form_fields_keep_the_legacy_starting_value():
+    base = screen()
+    base.fields.append(base.fields[0].model_copy(update={"name": "business_name", "legacy": "METODO", "label": "Método"}))
+    legacy = LEGACY | {"sections": LEGACY["sections"] + [{"name": "", "fields": [{"label": "METODO"}]}]}
+    problems = check_screen(base, legacy, MODEL, MOD, STEPS, RULES, ["REGISTRO DE CLIENTES"], {"METODO": "EFECTIVO"})
+    assert any("started with 'EFECTIVO'" in p for p in problems)
+    base.fields[-1].default = "EFECTIVO"
+    assert check_screen(base, legacy, MODEL, MOD, STEPS, RULES, ["REGISTRO DE CLIENTES"], {"METODO": "EFECTIVO"}) == []
+
+
+def test_noop_changes_are_detected():
+    from rewind.builder.spec import is_noop
+
+    spec = screen()
+    spec.fields[0].default = "today"
+    spec.fields[0].legacy = "FECHA PAGO"
+    same = Change(kind="default_value", screens=["REGISTRO DE CLIENTES"], element="FECHA PAGO",
+                  legacy="", modernized="", reason="", evidence_steps=[1])
+    assert is_noop(same, [spec], {"REGISTRO DE CLIENTES": {"FECHA PAGO": "26/10/2026"}})
+    assert not is_noop(same, [spec], {"REGISTRO DE CLIENTES": {}})
+    rename = Change(kind="rename_label", screens=["REGISTRO DE CLIENTES"], element="GRABAR",
+                    legacy="", modernized="", reason="", evidence_steps=[1])
+    assert not is_noop(rename, [spec], {})
+
+
 def test_absorbed_steps_follow_message_style():
     assert absorbed_steps(STEPS, {"REGISTRO DE CLIENTES": ("inline", "dialog")}) == {3: "inline_validation"}
     assert absorbed_steps(STEPS, {"REGISTRO DE CLIENTES": ("dialog", "dialog")}) == {}
