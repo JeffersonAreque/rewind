@@ -28,11 +28,11 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 |---|---|
 | App antigua de ejemplo (`legacy-demo/`) | Lista |
 | Configuración de proveedor (Baseten / Fireworks) | Lista |
-| Agente 1: pantallas | Listo: 100 % de acierto en el video de ejemplo |
-| Agente 2: flujos | Listo: 29/29 pasos, 11/11 valores, 4/4 flujos y 7/7 reglas en el video de ejemplo |
-| Agente 3: constructor | Listo: app moderna con 7 cambios justificados; 4/4 flujos repetidos con éxito |
-| Agente 4: verificador | Listo: 24/26 pasos pasan, 2 dudosos, 10/10 reglas; detecta 3 de 3 copias rotas de la app |
-| Segunda app: citas de una clínica, grabada rápido | Lista: 99 % pantallas, 100 % flujos, 4/4 flujos repetidos, 35/38 pasos verificados sin fallas; detecta 3 de 3 copias rotas |
+| Agente 1: pantallas | Listo: 100 % de acierto en facturación (110/110) y 99 % en la clínica (99/100) |
+| Agente 2: flujos | Listo: 100 % en los dos videos (facturación: 29/29 pasos, 11/11 valores, 4/4 flujos, 7/7 reglas; clínica: 41/41, 12/12, 4/4, 6/6) |
+| Agente 3: constructor | Listo: 4/4 flujos repetidos con éxito en cada app (9 cambios justificados en facturación, 7 en la clínica) |
+| Agente 4: verificador | Listo: facturación 25/26 pasos y 10/10 reglas; clínica 35/38 pasos y 10/12 reglas; 0 fallas, el resto dudosos. Detecta 3 de 3 copias rotas en cada app |
+| Segunda app: citas de una clínica, grabada rápido | Lista: otra estética, otro formato de errores y una regla nueva; sus resultados están en las filas de arriba |
 
 ## Tecnologías
 
@@ -77,7 +77,7 @@ Todo de una vez: los 4 agentes sobre un video y un solo informe HTML (`runs/<id>
 
 ```
 uv run python -m rewind run samples/facturacion-demo.mp4
-uv run python -m rewind run samples/clinica-demo.mp4 --still 0.2    # grabación rápida: pausas más cortas
+uv run python -m rewind run samples/clinica-demo.mp4
 uv run python -m rewind report runs/<id>
 ```
 

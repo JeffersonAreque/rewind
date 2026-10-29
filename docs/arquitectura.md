@@ -38,10 +38,10 @@ uv run python -m rewind screens samples/facturacion-demo.mp4
 ```
 
 1. **Cuadros clave** (`rewind/keyframes.py`). ffmpeg decodifica el video a 10 cuadros por segundo, en gris y a 320×180. Un cuadro es clave cuando cumple dos condiciones:
-   - La pantalla se queda quieta al menos 0,4 s, es decir, la persona hizo una pausa.
+   - La pantalla se queda quieta al menos 0,2 s, es decir, la persona hizo una pausa (alguien rápido mira un mensaje unos 0,3 s).
    - Es distinta del último cuadro clave en más píxeles de los que cambia un movimiento del mouse.
 
-   Escribir y mover el mouse cambian pocos píxeles; cambiar de pantalla o abrir un diálogo cambia miles. En el video de ejemplo salen 17 cuadros clave de unos 1.500 cuadros.
+   Escribir y mover el mouse cambian pocos píxeles; cambiar de pantalla o abrir un diálogo cambia miles. En el video de ejemplo salen 20 cuadros clave de unos 1.500 cuadros.
 2. **Lectura con Muse Spark Open.** Cada cuadro clave va al modelo, que responde en JSON con:
    - el nombre de la pantalla y el título de la ventana;
    - las secciones, con sus campos: etiqueta, tipo, valor y si es editable (fondo blanco) o de solo lectura (fondo gris);
@@ -73,7 +73,7 @@ uv run python scripts/eval_screens.py            # evalúa la última corrida
 - **Acierto:** de lo esperado, qué parte encontró el agente. Cada pantalla, campo, editable, tipo, botón, menú, columna, diálogo y la navegación vale un punto.
 - **Precisión:** de lo que reportó, qué parte existe de verdad. Inventar campos también cuenta como error.
 
-Resultado actual con Muse Spark Open: **100 % de acierto (110/110) y 100 % de precisión (32/32)**, con 17 llamadas y unos 85 mil tokens.
+Resultado actual con Muse Spark Open: **100 % de acierto (110/110) y 100 % de precisión (32/32)**, con 20 llamadas (unos 5 mil tokens cada una). En el video de la clínica: 99 % (99/100).
 
 ## Agente 2: flujos
 
@@ -138,7 +138,7 @@ uv run python scripts/eval_flows.py              # evalúa la última corrida
 - **Flujos:** cuentan cuando cubren los mismos pasos con al menos 60 % de coincidencia; el nombre no importa.
 - **Reglas:** se buscan por patrones.
 
-Resultado actual: **pasos 29/29, valores 11/11, flujos 4/4, reglas 7/7**. Costó unos 104 mil tokens (17 llamadas); repetir la corrida cuesta 0 tokens.
+Resultado actual: **pasos 29/29, valores 11/11, flujos 4/4, reglas 7/7**, con 20 llamadas; repetir la corrida cuesta 0 tokens. Con 0,2 s algunos cuadros caen en medio del tipeo ("FERRETERI"): un valor que la lectura siguiente continúa es el mismo paso a medio escribir, y su lectura parcial se descarta.
 
 ## Agente 3: constructor
 
@@ -180,12 +180,12 @@ Si un chequeo falla, el error vuelve al modelo y la llamada se reintenta. Una re
 
 Resultado en el video de ejemplo:
 - **4/4 flujos pasan**, con 29 pasos, 3 de ellos absorbidos por los cambios.
-- **36 de 36 elementos antiguos** se conservan.
-- **7 cambios de modernización.** Un cambio que deja todo igual que el programa antiguo no cuenta: "FECHA PAGO empieza con la fecha de hoy" se descartó porque la pantalla antigua ya lo hacía.
+- **34 de 36 elementos antiguos** se conservan; los otros 2 (los botones LIMPIAR) se quitaron a propósito porque ningún paso los usa.
+- **9 cambios de modernización.** Un cambio que deja todo igual que el programa antiguo no cuenta: "FECHA PAGO empieza con la fecha de hoy" se descartó porque la pantalla antigua ya lo hacía.
 - **Valores iniciales:** los campos de un formulario nuevo empiezan como en la grabación (FECHA PAGO = hoy, METODO = EFECTIVO). El checker lo exige y la prueba lo comprueba al abrir la pantalla; si se quita EFECTIVO, la prueba del pago falla.
 - **Fecha de la grabación:** las pruebas arrancan la app con `APP_TODAY` igual al día que el programa antiguo mostraba como hoy (26/10/2026). Ese día sale de las fechas con que empezaban sus formularios o, si no hay, de la barra de estado, y queda en `tests/recording.json`. Así "hoy" muestra lo mismo que el video y las capturas del verificador no cambian de un día a otro. Fuera de las pruebas, la app usa la fecha real.
 - **Prueba de que las pruebas miden algo:** si se quita la fórmula del saldo, la prueba del pago falla en el paso 28 ("no muestra S/ 340.00"); si se quita el campo obligatorio, falla la del cliente.
-- **Costo:** unos 105 mil tokens (10 llamadas); repetir cuesta 0.
+- **Costo:** unos 115 mil tokens (8 llamadas); repetir cuesta 0.
 
 ## Agente 4: verificador
 
@@ -201,15 +201,15 @@ Las pruebas del constructor dicen si cada flujo llega al final. El verificador a
    - `same_message`: el mismo mensaje, con su código, o ninguno;
    - `same_outcome`: el mismo efecto (se guardó o no, la misma pantalla, el mismo botón habilitado);
 
-   cada uno con `pass`, `fail` o `unclear`, más la lista de diferencias. El estilo, la disposición, las etiquetas, la fecha de hoy y los 7 cambios de `CHANGES.md` (como la página unida) no cuentan. Si el cuadro clave se tomó después de pasos posteriores (varios pasos comparten un cuadro), el modelo los recibe y lo que cambiaron no cuenta como diferencia. Las respuestas se validan y se guardan en caché por el hash de las imágenes.
+   cada uno con `pass`, `fail` o `unclear`, más la lista de diferencias. El estilo, la disposición, las etiquetas, la fecha de hoy y los cambios de `CHANGES.md` (como la página unida) no cuentan. En un paso de tipeo, un campo más angosto que su valor (que muestra solo una parte) tampoco cuenta. Si el cuadro clave se tomó después de pasos posteriores (varios pasos comparten un cuadro), el modelo los recibe y lo que cambiaron no cuenta como diferencia. Las respuestas se validan y se guardan en caché por el hash de las imágenes.
 3. **Veredictos (código, no el modelo).** Un paso pasa si se repitió bien y la comparación dice `pass`. Una regla pasa si todos sus pasos de evidencia pasan. `unclear` se muestra como advertencia, nunca como aprobado.
 4. **Salida.** `runs/<id>/verification.json` y `VERIFICATION.md`: tabla por paso y por regla, la imagen antigua y la nueva lado a lado, y las diferencias encontradas.
 
 Resultado en el video de ejemplo:
-- **24 pasos pasan, 0 fallan y 2 quedan dudosos**, más 3 absorbidos por cambios. Los dudosos son USUARIO y CLAVE: el video no tiene un cuadro del inicio de sesión lleno, porque el siguiente cuadro ya muestra la pantalla de clientes.
+- **25 pasos pasan, 0 fallan y 1 queda dudoso**, más 3 absorbidos por cambios. El dudoso es CLAVE: el siguiente cuadro del video ya muestra la pantalla de clientes.
 - **10 de 10 reglas pasan.**
 - **Encontró dos diferencias reales** en la primera corrida, que se corrigieron en el runtime: la búsqueda de facturas mostraba todas las facturas antes de BUSCAR (la pantalla antigua empieza vacía) y el error 0x0042 seguía debajo de RUC / DNI después de llenarlo.
-- **Costo:** unos 175 mil tokens la primera vez (26 llamadas); repetir cuesta 0.
+- **Costo:** unos 170 mil tokens la primera vez (26 llamadas); repetir cuesta 0.
 
 ### Prueba con copias rotas
 
@@ -223,9 +223,9 @@ Verifica la app sana y 3 copias rotas en `runs/<id>/eval/`. La app sana no debe 
 |---|---|---|
 | Sin la fórmula del saldo | 28 en la prueba (no muestra S/ 340.00); Muse Spark ya lo ve en los pasos 26 y 27 (S/ 640.00 en vez de S/ 340.00) | saldo, estado, cálculo y regreso a la búsqueda |
 | Sin el campo obligatorio | 7 en la prueba (no sale 0x0042); Muse Spark ya lo ve en el paso 6 (sale el aviso de éxito en vez del error) | RUC / DNI obligatorio y cliente nuevo |
-| Sin EFECTIVO | 22 en la prueba (METODO empieza vacío); Muse Spark ya lo ve en el paso 21 | abrir REGISTRAR PAGO y las del pago |
+| Sin EFECTIVO | 22 en la prueba (METODO empieza vacío) | abrir REGISTRAR PAGO y las del pago |
 
-Las copias solo pagan las capturas que cambian: unos 34 mil tokens en total. Repetir cuesta 0.
+Las copias solo pagan las capturas que cambian: unos 35 mil tokens en total. Repetir cuesta 0.
 
 ## Todo de una vez: `rewind run` e informe HTML
 
@@ -258,13 +258,13 @@ El video (`samples/clinica-demo.mp4`, 31 s) se grabó como trabaja una persona d
 
 ```
 uv run python scripts/record_demo.py --app clinica --fast
-uv run python -m rewind run samples/clinica-demo.mp4 --still 0.2
+uv run python -m rewind run samples/clinica-demo.mp4
 uv run python scripts/eval_screens.py runs/<id> --expected samples/clinica-demo.expected.json
 uv run python scripts/eval_flows.py runs/<id> --expected samples/clinica-demo.expected-flows.json
 uv run python scripts/eval_verifier.py runs/<id>
 ```
 
-**Cuadros clave.** Con 0,4 s de quietud salen 14 cuadros y se pierden casi todos los mensajes, porque la persona los cierra en 0,3 s. Con `--still 0.2` salen 20, uno por cada estado. En el video de facturación, 0,2 da 20 cuadros en vez de 17, así que el valor por defecto sigue en 0,4 hasta medir los dos videos con el mismo ajuste.
+**Cuadros clave.** Con 0,4 s de quietud salen 14 cuadros y se pierden casi todos los mensajes, porque la persona los cierra en 0,3 s. Con 0,2 s salen 20, uno por cada estado, así que 0,2 s es ahora el valor por defecto para todos los videos. En el de facturación da 20 cuadros en vez de 17, y sus pruebas siguen en 100 %.
 
 **Lo que la clínica destapó.** Cada problema se arregló de forma general, sin código para la clínica:
 - **Códigos de error:** se buscaban solo con forma `0x0042`; ahora también `E-101`, `ORA-00001` o `SQL0803`, y la app nueva muestra el texto del error tal como lo mostraba el programa antiguo.
@@ -282,7 +282,7 @@ uv run python scripts/eval_verifier.py runs/<id>
 - **Constructor:** 4/4 flujos repetidos con éxito y 35 de 35 elementos antiguos conservados.
 - **Verificador:** 35 pasos pasan, 0 fallan y 3 quedan dudosos, porque el aviso CITA RESERVADA tapa el nombre del paciente en el video. 10 de 12 reglas pasan y 2 quedan dudosas.
 - **Copias rotas:** detecta las 3. Sin APELLIDOS obligatorio falla el paso del `E-101`; sin el control del turno tomado falla el del `E-305`. Si la reserva no marca el turno como RESERVADA, la prueba no lo nota (la página sigue diciendo RESERVADA en otras filas): lo detecta solo Muse Spark al comparar las capturas (09:30 sigue LIBRE).
-- **Facturación:** después de estos cambios, su verificación y sus 3 copias rotas siguen pasando.
+- **Facturación:** se volvió a correr entera (`rewind run`) con el código nuevo y 0,2 s; sus resultados de arriba son los de esa corrida.
 - **Costo:** unos 1,2 millones de tokens en total, incluidas cuatro reconstrucciones mientras se arreglaba lo anterior. Repetir cuesta 0.
 
 ## Proveedor de modelos

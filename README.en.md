@@ -27,11 +27,11 @@ More detail in [docs/arquitectura.md](docs/arquitectura.md) (Spanish).
 |---|---|
 | Sample legacy app (`legacy-demo/`) | Done |
 | Provider config (Baseten / Fireworks) | Done |
-| Agent 1: screens | Done: 100% accuracy on the sample video |
-| Agent 2: flows | Done: 29/29 steps, 11/11 values, 4/4 workflows and 7/7 rules on the sample video |
-| Agent 3: builder | Done: modern app with 7 justified changes; 4/4 workflows replayed successfully |
-| Agent 4: verifier | Done: 24/26 steps pass, 2 unclear, 10/10 rules; catches 3 of 3 broken copies of the app |
-| Second app: clinic appointments, recorded fast | Done: 99% screens, 100% flows, 4/4 workflows replayed, 35/38 steps verified with no fails; catches 3 of 3 broken copies |
+| Agent 1: screens | Done: 100% accuracy on billing (110/110) and 99% on the clinic (99/100) |
+| Agent 2: flows | Done: 100% on both videos (billing: 29/29 steps, 11/11 values, 4/4 workflows, 7/7 rules; clinic: 41/41, 12/12, 4/4, 6/6) |
+| Agent 3: builder | Done: 4/4 workflows replayed successfully in each app (9 justified changes in billing, 7 in the clinic) |
+| Agent 4: verifier | Done: billing 25/26 steps and 10/10 rules; clinic 35/38 steps and 10/12 rules; 0 fails, the rest unclear. Catches 3 of 3 broken copies in each app |
+| Second app: clinic appointments, recorded fast | Done: another look, another error format and a new rule; its results are in the rows above |
 
 ## Stack
 
@@ -76,7 +76,7 @@ All at once: the 4 agents on one video and a single HTML report (`runs/<id>/repo
 
 ```
 uv run python -m rewind run samples/facturacion-demo.mp4
-uv run python -m rewind run samples/clinica-demo.mp4 --still 0.2    # fast recording: shorter pauses
+uv run python -m rewind run samples/clinica-demo.mp4
 uv run python -m rewind report runs/<id>
 ```
 
