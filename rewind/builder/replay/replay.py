@@ -23,11 +23,17 @@ EVIDENCE = os.environ.get("REWIND_EVIDENCE")
 NORMALIZE = r"""s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
   .replace(/:/g, ' ').replace(/\s+/g, ' ').trim().replace(/[ .]+$/, '')"""
 
-FIND = f"""([attr, label]) => {{
+FIND = f"""([attr, label, tags]) => {{
   const n = {NORMALIZE};
   return [...document.querySelectorAll(`[${{attr}}]`)]
-    .find(e => n(e.getAttribute(attr)) === n(label) && e.getClientRects().length > 0) || null;
+    .find(e => n(e.getAttribute(attr)) === n(label) && e.getClientRects().length > 0
+               && (!tags || tags.includes(e.tagName))) || null;
 }}"""
+
+# What each kind of step acts on: on a merged page a label can be a column and a field at once.
+TYPED = ["INPUT", "TEXTAREA"]
+CHOSEN = ["SELECT", "TABLE", "FIELDSET"]
+CLICKED = ["BUTTON", "A", "INPUT"]
 
 PAGE_HAS = f"""(texts) => {{
   const n = {NORMALIZE};
@@ -57,9 +63,9 @@ class StepFailed(AssertionError):
     pass
 
 
-def find(page, label: str, attr: str = "data-legacy"):
+def find(page, label: str, attr: str = "data-legacy", tags: list[str] | None = None):
     try:
-        return page.wait_for_function(FIND, arg=[attr, label], timeout=TIMEOUT).as_element()
+        return page.wait_for_function(FIND, arg=[attr, label, tags], timeout=TIMEOUT).as_element()
     except Exception:
         raise StepFailed(f"no visible element with {attr}={label!r}") from None
 
@@ -82,13 +88,13 @@ def do(page, step: dict, password: str) -> None:
     if action == "open_screen":
         find(page, target, "data-legacy-screen")
     elif action == "type":
-        element = find(page, target)
+        element = find(page, target, tags=TYPED)
         text = password if step.get("confidence") == "masked" else value
         if element.get_attribute("type") == "date":
             text = to_iso(text)
         element.fill(text or "")
     elif action == "select":
-        element = find(page, target)
+        element = find(page, target, tags=CHOSEN)
         tag = element.evaluate("e => e.tagName")
         if tag == "SELECT":
             option = element.evaluate(
@@ -98,11 +104,16 @@ def do(page, step: dict, password: str) -> None:
                 raise StepFailed(f"{target!r} has no option {value!r}")
             element.select_option(option)
         elif tag == "TABLE":
-            row = element.evaluate_handle(
-                f"(t, v) => {{ const n = {NORMALIZE}; return [...t.querySelectorAll('tbody tr')]"
-                f".find(r => n(r.innerText).includes(n(v))) || null; }}", value).as_element()
+            row = None
+            for reading in [value, *step.get("variants", [])]:  # a doubtful reading may be one of its variants
+                row = element.evaluate_handle(
+                    f"(t, v) => {{ const n = {NORMALIZE}; return [...t.querySelectorAll('tbody tr')]"
+                    f".find(r => n(r.innerText).includes(n(v))) || null; }}", reading).as_element()
+                if row is not None:
+                    break
             if row is None:
-                raise StepFailed(f"table {target!r} has no row with {value!r}")
+                raise StepFailed(f"table {target!r} has no row with {value!r}" +
+                                 (f" or {step['variants']}" if step.get("variants") else ""))
             row.click()
         else:  # a group of radio buttons
             label = element.evaluate_handle(
@@ -112,7 +123,7 @@ def do(page, step: dict, password: str) -> None:
                 raise StepFailed(f"{target!r} has no choice {value!r}")
             label.click()
     elif action == "click":
-        find(page, target).click()
+        find(page, target, tags=CLICKED).click()
         page.wait_for_load_state()
     elif action == "see_message":
         expected = step.get("code") or target
@@ -125,7 +136,7 @@ def check(page, c: dict) -> None:
     elif c["kind"] == "row_count":
         wait_for(page, ROW_COUNT, [c["table"], c["count"]], f"table {c['table']!r} does not have {c['count']} rows")
     elif c["kind"] == "default":
-        element = find(page, c["field"])
+        element = find(page, c["field"], tags=TYPED + CHOSEN)
         shown = element.evaluate(
             """e => e.tagName === 'FIELDSET'
                  ? ([...e.querySelectorAll('input:checked')].map(i => i.closest('label').innerText)[0] || '')
@@ -135,7 +146,7 @@ def check(page, c: dict) -> None:
         if normalize(shown) != normalize(wanted):
             raise StepFailed(f"{c['field']!r} starts with {shown!r}; the legacy screen started with {c['value']!r}")
     elif c["kind"] == "button":
-        disabled = find(page, c["button"]).is_disabled()
+        disabled = find(page, c["button"], tags=CLICKED).is_disabled()
         if disabled == c["enabled"]:
             raise StepFailed(f"button {c['button']!r} should be {'enabled' if c['enabled'] else 'disabled'}")
 
