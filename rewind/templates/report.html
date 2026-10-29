@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ data.title }}: Rewind report</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #16181d; --muted: #5d6470; --line: #e2e5ea;
+    --accent: #2453d6; --pass: #137a3c; --pass-bg: #e3f5ea; --fail: #b42318; --fail-bg: #fde8e6;
+    --warn: #8a5a00; --warn-bg: #fdf1d6; --info: #4b5563; --info-bg: #eceef2;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101217; --card: #181b22; --text: #e8eaee; --muted: #9aa2ae; --line: #2a2f39;
+      --accent: #7ea2ff; --pass: #6fd69a; --pass-bg: #163322; --fail: #ff8f85; --fail-bg: #3a1714;
+      --warn: #f3c562; --warn-bg: #3a2d0d; --info: #b8bec8; --info-bg: #252a33;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header, main { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+  header { padding-top: 32px; }
+  h1 { margin: 0 0 4px; font-size: 1.8rem; }
+  h2 { margin: 40px 0 12px; font-size: 1.3rem; }
+  h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .muted { color: var(--muted); }
+  nav { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 16px 0 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card b { display: block; font-size: 1.6rem; line-height: 1.2; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pair figure { margin: 0; }
+  .pair figcaption { font-size: .85rem; color: var(--muted); margin-bottom: 4px; }
+  img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; background: var(--info-bg); aspect-ratio: 16 / 9; }
+  .screen { margin-bottom: 16px; }
+  .table-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .8rem; font-weight: 600; white-space: nowrap; }
+  .pass { color: var(--pass); background: var(--pass-bg); }
+  .fail { color: var(--fail); background: var(--fail-bg); }
+  .unclear { color: var(--warn); background: var(--warn-bg); }
+  .absorbed, .none { color: var(--info); background: var(--info-bg); }
+  .workflows { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .workflows ol { margin: 8px 0 0; padding-left: 1.6em; }
+  .workflows li { margin: 2px 0; }
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
+  summary { cursor: pointer; padding: 10px 14px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  details > div { padding: 0 14px 14px; }
+  details ul { margin: 10px 0 0; padding-left: 1.2em; }
+  code { font-size: .85em; }
+  footer { max-width: 1180px; margin: 40px auto; padding: 0 16px; color: var(--muted); font-size: .85rem; }
+  @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } h1 { font-size: 1.5rem; } }
+</style>
+</head>
+<body>
+{% macro badge(verdict) -%}
+{% if verdict %}<span class="badge {{ verdict }}">{{ verdict }}</span>{% else %}<span class="badge none">not verified</span>{% endif %}
+{%- endmacro %}
+<header>
+  <h1>{{ data.title }}</h1>
+  <p class="muted">Rewind rebuilt this app from <code>{{ data.video }}</code>, a screen recording of the legacy program, with no source code. Run <code>{{ data.run }}</code>{% if data.model %}, model {{ data.model }}{% endif %}.</p>
+  <nav aria-label="Sections">
+    <a href="#screens">Before / after</a><a href="#workflows">Workflows</a><a href="#rules">Rules</a>
+    <a href="#changes">Changes</a><a href="#verification">Verification</a>
+  </nav>
+  <div class="cards">
+    <div class="card"><b>{{ data.screens|length }}</b>legacy screens</div>
+    <div class="card"><b>{{ data.workflows|length }}</b>workflows</div>
+    <div class="card"><b>{{ data.rules|length }}</b>business rules</div>
+    <div class="card"><b>{{ data.changes|length }}</b>modernization changes</div>
+    {% if data.summary %}{% set s = data.summary.steps %}
+    <div class="card"><b>{{ s.pass }} / {{ s.pass + s.fail + s.unclear }}</b>steps verified ({{ s.fail }} fail, {{ s.unclear }} unclear)</div>
+    <div class="card"><b>{{ data.summary.rules.pass }} / {{ data.rules|length }}</b>rules verified</div>
+    {% endif %}
+  </div>
+</header>
+<main>
+  <h2 id="screens">Before / after</h2>
+  {% for s in data.screens %}
+  <section class="screen card">
+    <h3>{{ s.name }}{% if s.modern %} <span class="muted">→ {{ s.modern }}</span>{% endif %}</h3>
+    <div class="pair">
+      <figure><figcaption>Legacy (recording)</figcaption><img data-img="{{ s.legacy_image }}" alt="{{ s.name }} in the legacy program"></figure>
+      <figure><figcaption>New app</figcaption>{% if s.new_image %}<img data-img="{{ s.new_image }}" alt="{{ s.name }} in the new app">{% else %}<p class="muted">Not verified yet.</p>{% endif %}</figure>
+    </div>
+    <p class="muted">{{ s.fields }} fields, {{ s.buttons }} buttons</p>
+  </section>
+  {% endfor %}
+
+  {% if data.workflows %}
+  <h2 id="workflows">Workflows</h2>
+  <div class="workflows">
+    {% for w in data.workflows %}
+    <section class="card">
+      <h3>{{ w.name }}</h3>
+      <p class="muted">{{ w.goal }}</p>
+      <ol>{% for i in w["items"] %}<li value="{{ i.n }}">{{ i.text }} {% if i.verdict %}{{ badge(i.verdict) }}{% endif %}</li>{% endfor %}</ol>
+    </section>
+    {% endfor %}
+  </div>
+
+  <h2 id="rules">Business rules</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Rule</th><th>Kind</th><th>Evidence steps</th><th>Verified</th></tr></thead>
+    <tbody>{% for r in data.rules %}
+      <tr><td>{{ r.n }}</td><td>{{ r.description }}</td><td>{{ r.kind }}</td><td>{{ r.evidence_steps|join(", ") }}</td><td>{{ badge(r.verdict) }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+
+  {% if data.changes %}
+  <h2 id="changes">Modernization changes</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Change</th><th>Legacy</th><th>Modernized (as built)</th><th>Why</th><th>Steps</th></tr></thead>
+    <tbody>{% for c in data.changes %}
+      <tr><td>{{ loop.index }}</td><td>{{ c.kind }}</td><td>{{ c.before }}</td><td>{{ c.after }}</td><td>{{ c.reason }}</td><td>{{ c.evidence_steps|join(", ") }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+
+  <h2 id="verification">Verification</h2>
+  {% if data.summary %}{% set s = data.summary.steps %}
+  <p>Each workflow was replayed on the new app with a screenshot after every step, and Muse Spark Open compared it with the recording's keyframe. A step passes only when it replayed and the comparison passed; "unclear" is a warning, never a pass.
+  <b>{{ s.pass }} pass, {{ s.fail }} fail, {{ s.unclear }} unclear, {{ s.absorbed }} absorbed by changes.</b></p>
+  {% for st in data.steps %}
+  <details{% if st.verdict == "fail" %} open{% endif %}>
+    <summary>{{ badge(st.verdict) }} <b>Step {{ st.n }}</b> <span>{{ st.text }}</span> <span class="muted">{{ st.screen }}{% if st.workflow %} · {{ st.workflow }}{% endif %}</span></summary>
+    <div>
+      {% if st.verdict == "absorbed" %}<p class="muted">Not needed in the new app: {{ st.absorbed }}.</p>{% else %}
+      <div class="pair">
+        <figure><figcaption>Legacy (keyframe {{ st.frame_to }})</figcaption>{% if st.legacy_image %}<img data-img="{{ st.legacy_image }}" alt="Step {{ st.n }} in the recording" loading="lazy">{% endif %}</figure>
+        <figure><figcaption>New app</figcaption>{% if st.new_image %}<img data-img="{{ st.new_image }}" alt="Step {{ st.n }} in the new app" loading="lazy">{% else %}<p class="muted">No screenshot.</p>{% endif %}</figure>
+      </div>
+      {% if st.comparison %}<p class="muted">Data {{ badge(st.comparison.same_data) }} Message {{ badge(st.comparison.same_message) }} Outcome {{ badge(st.comparison.same_outcome) }}</p>{% endif %}
+      <ul>
+        {% if st.replay_error %}<li>Replay: {{ st.replay_error }}</li>{% endif %}
+        {% for d in (st.comparison or {}).get("differences", []) %}<li>{{ d }}</li>{% endfor %}
+        {% if st.comparison_error %}<li>Comparison failed: {{ st.comparison_error }}</li>{% endif %}
+      </ul>
+      {% endif %}
+    </div>
+  </details>
+  {% endfor %}
+  {% else %}
+  <p class="muted">Not verified yet: run <code>python -m rewind verify runs/{{ data.run }}</code>.</p>
+  {% endif %}
+</main>
+<footer>Generated by Rewind on {{ data.created }}. The model never wrote code: it filled JSON specs that code validated.</footer>
+<script>
+  const IMAGES = {{ images|safe }};
+  document.querySelectorAll("img[data-img]").forEach((img) => { img.src = IMAGES[img.dataset.img] || ""; });
+</script>
+</body>
+</html>
