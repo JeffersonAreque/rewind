@@ -116,6 +116,21 @@ def test_field_read_in_two_pairs_is_one_step():
     assert [r["value"] for r in steps[1].readings] == ["FERRETERIA EL CASTANAL R.A.C.I", "FERRETERIA EL CASTANAL S.A.C."]
 
 
+def test_a_value_read_while_still_typed_is_the_same_step():
+    frames = [make_frame(i, float(i), "CLIENTES") for i in range(4)]
+    typed = {"action": "type", "element": "field"}
+    pairs = [
+        pair(0, 1, typed | {"target": "RAZON SOCIAL", "value": "FERRETERI"}),
+        pair(1, 2, typed | {"target": "RAZON SOCIAL", "value": "FERRETERIA EL CASTANAL S.A.C."},
+             typed | {"target": "DIRECCION", "value": "Jl"}),
+        pair(2, 3, typed | {"target": "DIRECCION", "value": "JR. LORETO 455"}),
+    ]
+    steps = build_steps(frames, pairs)
+    assert [(s.target, s.value) for s in steps[1:]] == [
+        ("RAZON SOCIAL", "FERRETERIA EL CASTANAL S.A.C."), ("DIRECCION", "JR. LORETO 455")]
+    assert [r["value"] for r in steps[1].readings] == ["FERRETERIA EL CASTANAL S.A.C."]  # no half typed reading
+
+
 def test_new_value_after_a_click_is_a_new_step():
     frames = [make_frame(i, float(i), "FACTURAS") for i in range(3)]
     pick = {"action": "select", "target": "CLIENTE", "element": "list"}

@@ -177,19 +177,27 @@ def similar(a: str, b: str) -> bool:
     return SequenceMatcher(None, normalize(a), normalize(b)).ratio() >= SIMILAR
 
 
+def in_progress(earlier: str, later: str) -> bool:
+    """`earlier` was read while the value was still being typed: `later` goes on from it
+    (its last character may have been caught half drawn, as "Jl" for "JR. LORETO")."""
+    a, b = normalize(earlier), normalize(later)
+    return len(a) < len(b) and b.startswith(a[:-1])
+
+
 def find_reread(steps: list[Step], action, screen: str) -> Step | None:
     """The earlier step this action repeats, if any.
 
     A field still being filled shows up in two pairs (half typed, or misread
-    once): same screen visit, same target, a similar value and no click in
-    between. Those are one step with two readings, not two steps.
+    once): same screen visit, same target, a similar or continued value and no
+    click in between. Those are one step with two readings, not two steps.
     """
     for step in reversed(steps):
         if step.action in ("open_screen", "click", "see_message"):
             return None
         if (step.screen == screen and step.action == action.action
                 and normalize(step.target) == normalize(action.target)
-                and (not step.value or not action.value or similar(step.value, action.value))):
+                and (not step.value or not action.value or similar(step.value, action.value)
+                     or in_progress(step.value, action.value))):
             return step
     return None
 
@@ -229,6 +237,8 @@ def build_steps(frames: list[dict], pairs: list[dict]) -> list[Step]:
         for action in pair["analysis"].actions if "analysis" in pair else []:
             reading = [{"source": source, "value": action.value}] if action.value else []
             if action.action in ("type", "select") and (earlier := find_reread(steps, action, before.screen_name)):
+                if earlier.value and action.value and in_progress(earlier.value, action.value):
+                    earlier.readings = []  # a half typed value is no reading of the final one
                 earlier.readings += reading
                 earlier.value = action.value or earlier.value  # the later reading saw more of the value
                 earlier.frame_to, earlier.time_to = where["frame_to"], where["time_to"]
