@@ -1,9 +1,15 @@
 """Check that the verifier catches broken apps.
 
-Verifies the healthy app of a run and 3 broken copies of it:
+Verifies the healthy app of a run and 3 broken copies of it. For the billing
+sample (facturacion-demo):
 - no balance formula: paying no longer lowers the invoice balance;
 - no required field: RUC / DNI can be saved empty;
 - no EFECTIVO: the payment method loses its EFECTIVO option.
+For the clinic sample (clinica-demo):
+- no required field: APELLIDOS can be saved empty;
+- no taken check: a slot that is already booked can be booked again;
+- no status change: booking leaves the slot LIBRE (only the screenshots show it:
+  the page still says RESERVADA in other rows).
 
 The healthy app must have no failed step or rule. Each broken copy must fail
 the step where the break shows and a rule about it. Steps are found by what
@@ -18,7 +24,8 @@ for the screenshots that change.
 Usage:
     uv run python scripts/eval_verifier.py [runs/<id>]
 
-Without a run folder it uses the latest run that has a built app.
+Without a run folder it uses the latest run that has a built app. The sample
+comes from the run's video name.
 """
 
 import argparse
@@ -40,10 +47,22 @@ def no_balance_formula(spec: dict) -> None:
         s["effects"] = [e for e in s.get("effects", []) if not e["target"].endswith(".balance")]
 
 
-def no_required_field(spec: dict) -> None:
+def not_required(label: str):
+    def no_required_field(spec: dict) -> None:
+        for s in spec["screens"]:
+            names = {f["name"] for f in s.get("fields", []) if normalize(f["legacy"]) == label}
+            s["validations"] = [v for v in s.get("validations", []) if not (v["check"] == "required" and v["field"] in names)]
+    return no_required_field
+
+
+def no_taken_check(spec: dict) -> None:
     for s in spec["screens"]:
-        names = {f["name"] for f in s.get("fields", []) if normalize(f["legacy"]) == "RUC / DNI"}
-        s["validations"] = [v for v in s.get("validations", []) if not (v["check"] == "required" and v["field"] in names)]
+        s["validations"] = [v for v in s.get("validations", []) if v["check"] != "condition"]
+
+
+def no_status_change(spec: dict) -> None:
+    for s in spec["screens"]:
+        s["effects"] = [e for e in s.get("effects", []) if not e["target"].endswith(".status")]
 
 
 def no_efectivo(spec: dict) -> None:
@@ -56,13 +75,24 @@ def no_efectivo(spec: dict) -> None:
                 f["default"] = None
 
 
-# name, break, the step that must fail (screen, action, words in its target or code), rule patterns
-COPIES = [
-    ("healthy", None, None, None),
-    ("no-balance-formula", no_balance_formula, ("BUSQUEDA DE FACTURAS", "see_message", "OPERACION COMPLETADA"), ["SALDO"]),
-    ("no-required-field", no_required_field, ("REGISTRO DE CLIENTES", "see_message", "0X0042"), ["0X0042"]),
-    ("no-efectivo", no_efectivo, ("REGISTRAR PAGO", "open_screen", "REGISTRAR PAGO"), ["REGISTRAR PAGO"]),
-]
+# per sample: name, break, the step that must fail (screen, action, words in its target or code), rule patterns
+SAMPLES = {
+    "facturacion-demo": [
+        ("healthy", None, None, None),
+        ("no-balance-formula", no_balance_formula, ("BUSQUEDA DE FACTURAS", "see_message", "OPERACION COMPLETADA"),
+         ["SALDO"]),
+        ("no-required-field", not_required("RUC / DNI"), ("REGISTRO DE CLIENTES", "see_message", "0X0042"), ["0X0042"]),
+        ("no-efectivo", no_efectivo, ("REGISTRAR PAGO", "open_screen", "REGISTRAR PAGO"), ["REGISTRAR PAGO"]),
+    ],
+    "clinica-demo": [
+        ("healthy", None, None, None),
+        ("no-required-field", not_required("APELLIDOS"), ("MANTENIMIENTO DE PACIENTES", "see_message", "E-101"),
+         ["E-101"]),
+        ("no-taken-check", no_taken_check, ("RESERVA DE CITA", "see_message", "E-305"), ["E-305"]),
+        ("no-status-change", no_status_change, ("AGENDA DE CITAS", "see_message", "CITA RESERVADA"),
+         ["LIBRE", "RESERVADA"]),
+    ],
+}
 
 
 def latest_run() -> Path:
@@ -98,10 +128,13 @@ def main() -> int:
     parser.add_argument("run", type=Path, nargs="?", help="run folder with a built app (default: latest)")
     args = parser.parse_args()
     run = args.run or latest_run()
-    print(f"Run: {run}")
+    sample = Path(json.loads((run / "screens.json").read_text(encoding="utf-8"))["video"]).stem
+    if sample not in SAMPLES:
+        raise SystemExit(f"no broken copies defined for {sample!r}; known samples: {', '.join(SAMPLES)}")
+    print(f"Run: {run} ({sample})")
 
     missed, tokens = [], 0
-    for name, breaks, step_wanted, rule_patterns in COPIES:
+    for name, breaks, step_wanted, rule_patterns in SAMPLES[sample]:
         out = run / "eval" / name
         app = run / "app"
         if breaks:

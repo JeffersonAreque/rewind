@@ -1,0 +1,73 @@
+{
+  "video": "samples/clinica-demo.mp4",
+  "about": "What the screens agent should find in the clinic video. Written by hand from legacy-clinica/templates/, which Rewind never sees.",
+  "screens": [
+    {
+      "name": "ACCESO AL SISTEMA",
+      "aliases": ["LOGIN"],
+      "menus": [],
+      "fields": [
+        {"label": "OPERADOR", "type": "text", "editable": true},
+        {"label": "CONTRASENA", "type": "password", "editable": true}
+      ],
+      "buttons": ["INGRESAR", "SALIR"],
+      "tables": [],
+      "dialogs": []
+    },
+    {
+      "name": "AGENDA DE CITAS",
+      "aliases": ["AGENDA"],
+      "menus": ["F2 PACIENTES", "F3 AGENDA", "F10 SALIR"],
+      "fields": [
+        {"label": "ESPECIALIDAD", "type": "select", "editable": true},
+        {"label": "FECHA", "type": "date", "editable": true},
+        {"label": "MEDICO", "type": "select", "editable": true},
+        {"label": "ESTADO", "type": "select", "editable": true}
+      ],
+      "buttons": ["CONSULTAR", "LIMPIAR", "RESERVAR"],
+      "tables": [
+        {"name": "TURNOS", "columns": ["HORA", "MEDICO", "CONSULTORIO", "PACIENTE", "ESTADO"]}
+      ],
+      "dialogs": ["CITA RESERVADA"]
+    },
+    {
+      "name": "MANTENIMIENTO DE PACIENTES",
+      "aliases": ["PACIENTES"],
+      "menus": ["F2 PACIENTES", "F3 AGENDA", "F10 SALIR"],
+      "fields": [
+        {"label": "DNI", "type": "text", "editable": true},
+        {"label": "FECHA NAC", "type": "date", "editable": true},
+        {"label": "APELLIDOS", "type": "text", "editable": true},
+        {"label": "TELEFONO", "type": "text", "editable": true},
+        {"label": "NOMBRES", "type": "text", "editable": true},
+        {"label": "SEGURO", "type": "radio", "editable": true}
+      ],
+      "buttons": ["GRABAR", "NUEVO"],
+      "tables": [
+        {"name": "PACIENTES REGISTRADOS", "columns": ["H.C", "DNI", "APELLIDOS Y NOMBRES", "SEGURO", "TELEFONO"]}
+      ],
+      "dialogs": ["E-101 DATO REQUERIDO", "DATOS GRABADOS CORRECTAMENTE"]
+    },
+    {
+      "name": "RESERVA DE CITA",
+      "aliases": ["RESERVA"],
+      "menus": ["F2 PACIENTES", "F3 AGENDA", "F10 SALIR"],
+      "fields": [
+        {"label": "FECHA", "type": "date", "editable": false},
+        {"label": "HORA", "type": "text", "editable": false},
+        {"label": "MEDICO", "type": "text", "editable": false},
+        {"label": "CONSULTORIO", "type": "text", "editable": false},
+        {"label": "ESPECIALIDAD", "type": "text", "editable": false},
+        {"label": "ESTADO", "type": "text", "editable": false},
+        {"label": "PACIENTE", "type": "select", "editable": true},
+        {"label": "TIPO", "type": "radio", "editable": true},
+        {"label": "MOTIVO", "type": "text", "editable": true}
+      ],
+      "buttons": ["GRABAR", "CANCELAR"],
+      "tables": [],
+      "dialogs": ["E-305 TURNO NO DISPONIBLE"]
+    }
+  ],
+  "navigation": ["ACCESO AL SISTEMA", "AGENDA DE CITAS", "MANTENIMIENTO DE PACIENTES", "AGENDA DE CITAS",
+                 "RESERVA DE CITA", "AGENDA DE CITAS", "RESERVA DE CITA", "AGENDA DE CITAS"]
+}
