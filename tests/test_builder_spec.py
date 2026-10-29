@@ -120,6 +120,44 @@ def test_unknown_entity_field_and_rule_are_reported():
     assert any("rule 9" in p for p in problems) and any("0x0042" in p for p in problems)
 
 
+def test_a_condition_needs_an_expression_over_known_fields():
+    def problems(other):
+        rule = {"field": "document", "check": "condition", "other": other, "code": "E-305", "message": "E-305 X", "rule": 1}
+        return [p for p in check(screen(validations=[rule])) if "condition" in p or "unknown names" in p]
+
+    assert problems("customer.document != ''") == []
+    assert problems(None) and problems("invoice.status == 'PAGADA'")
+
+
+def test_only_open_buttons_need_a_target():
+    actions = [{"label": "Guardar", "legacy": "GRABAR", "action": "save"},
+               {"label": "Limpiar", "legacy": "LIMPIAR", "action": "cancel"}]
+    assert not [p for p in check(screen(actions=actions)) if "target" in p]
+    opener = actions + [{"label": "Abrir", "legacy": "LIMPIAR", "action": "open"}]
+    assert any("target None" in p for p in check(screen(actions=opener)))
+
+
+def test_formulas_use_other_fields_of_the_same_record():
+    def problems(formula):
+        model = DataModel.model_validate({"entities": [{"name": "person", "label": "Persona", "display": "full", "fields": [
+            {"name": "last", "type": "text", "label": "Apellidos"}, {"name": "first", "type": "text", "label": "Nombres"},
+            {"name": "full", "type": "text", "label": "Nombre", "formula": formula}]}], "seed": []})
+        return check_data_model(model, {}, {})
+
+    assert problems("person.last + ' ' + person.first") == []
+    assert any("person.full" in p for p in problems("person.full + person.first"))
+    assert any("other.name" in p for p in problems("other.name"))
+
+
+def test_error_codes_of_other_programs_are_accepted():
+    def code_problems(code):
+        rule = {"field": "document", "check": "required", "code": code, "message": f"{code} DATO REQUERIDO", "rule": 1}
+        return [p for p in check(screen(validations=[rule])) if "code" in p]
+
+    assert code_problems("E-101") == [] and code_problems("ORA-00001") == []
+    assert code_problems("E-101 DATO REQUERIDO") != []  # the code alone
+
+
 def test_styles_must_follow_changes():
     assert any("error_style" in p for p in check(screen(error_style="dialog")))
 
@@ -156,8 +194,10 @@ def test_legacy_defaults_skip_placeholders():
         {"label": "CLIENTE", "value": "(TODOS)", "editable": True},
         {"label": "TOTAL", "value": "S/ 640.00", "editable": False},
     ]}]})
-    frames = [{"analysis": analysis}]
+    login = FrameAnalysis(screen_name="LOGIN", window_title="LOGIN")
+    frames = [{"analysis": login}, {"analysis": analysis}]
     assert legacy_defaults(frames, "PAGO") == {"FECHA PAGO": "26/10/2026", "METODO": "EFECTIVO"}
+    assert legacy_defaults(frames[1:], "PAGO") == {}  # the recording's first frame may show typed values
 
 
 def test_recording_date_comes_from_starting_dates_then_status_bars():

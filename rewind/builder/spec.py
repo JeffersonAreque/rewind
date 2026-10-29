@@ -12,11 +12,11 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
-from rewind.agents.screens import normalize
+from rewind.agents.flows import ERROR_CODE
+from rewind.agents.screens import PLACEHOLDER, normalize
 from rewind.builder.runtime import expr
 
 Ident = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
-ERROR_CODE = re.compile(r"^0x[0-9A-F]{4}$")
 
 
 def slug(name: str) -> str:
@@ -36,6 +36,8 @@ class EntityField(BaseModel):
     ref: Ident | None = Field(None, description="ref: name of the entity this field points to")
     serial_prefix: str | None = Field(None, description="serial: letters before the number, e.g. 'C'")
     serial_digits: int = 4
+    formula: str | None = Field(None, description="text made from other fields of the same record, as a safe "
+                                "expression, e.g. person.last_name + ' ' + person.first_name; computed on save")
 
 
 class Entity(BaseModel):
@@ -103,9 +105,11 @@ class Filter(BaseModel):
     name: Ident
     label: str
     legacy: str
-    field: Ident = Field(description="entity field it filters")
+    field: str = Field(description="entity field it filters, or ref.field to filter by a field of the linked "
+                                   "record (e.g. doctor.specialty)")
     op: Literal["eq", "contains", "from", "to"]
     input: Literal["text", "select", "date"]
+    default: str | None = Field(None, description="'today' or a fixed value the filter starts with")
 
 
 class Column(BaseModel):
@@ -125,16 +129,19 @@ class Action(BaseModel):
     label: str
     legacy: str = Field(description="legacy button label")
     action: Literal["login", "save", "clear", "search", "lookup", "open", "cancel"]
-    target: str | None = Field(None, description="open / cancel: legacy name of the screen it goes to")
+    target: str | None = Field(None, description="open: legacy name of the screen it goes to; cancel: that screen, "
+                                                 "or null to stay (or exit, on a login)")
     requires_selection: bool = Field(False, description="enabled only after a table row is selected")
 
 
 class Validation(BaseModel):
     field: Ident
-    check: Literal["required", "positive", "not_above"]
-    other: str | None = Field(None, description="not_above: the entity.field it cannot exceed")
-    code: str = Field(description="legacy error code, e.g. 0x0042")
-    message: str = Field(description="legacy error text, e.g. CAMPO OBLIGATORIO")
+    check: Literal["required", "positive", "not_above", "condition"]
+    other: str | None = Field(None, description="not_above: the entity.field it cannot exceed; condition: the safe "
+                                                "expression that must hold to save, e.g. invoice.status != 'PAGADA'")
+    code: str = Field(description="legacy error code alone, e.g. 0x0042 or E-101")
+    message: str = Field(description="legacy error text exactly as the app showed it, code included, "
+                                     "e.g. ERROR 0x0042: CAMPO OBLIGATORIO or E-101 DATO REQUERIDO: DNI")
     rule: int = Field(description="number of the business rule this comes from")
 
 
@@ -191,16 +198,20 @@ def legacy_elements(screen: dict) -> dict[str, set[str]]:
     }
 
 
-PLACEHOLDER = re.compile(r"^[\[(].*[\])]$|^[DMAY/ -]+$")  # (TODOS), [TODAS], DD/MM/AAAA
 DATE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
 
 
 def legacy_defaults(frames: list[dict], screen_name: str) -> dict[str, str]:
     """Values the legacy screen started with: editable fields filled in the first frame of the
-    screen (before the user typed anything there). Placeholders like DD/MM/AAAA are not values."""
-    for frame in frames:
+    screen (before the user typed anything there). Placeholders like DD/MM/AAAA are not values.
+
+    The first keyframe of the whole recording is the exception: the user may have typed before
+    it, so its values are typed steps (see flows.typed_before), not defaults."""
+    for i, frame in enumerate(frames):
         a = frame["analysis"]
         if normalize(a.screen_name) == normalize(screen_name):
+            if i == 0:
+                return {}
             return {f.label: f.value for s in a.sections for f in s.fields
                     if f.editable and f.value and not PLACEHOLDER.match(normalize(f.value))}
     return {}
@@ -250,6 +261,12 @@ def check_data_model(model: DataModel, tables: dict[str, list[str]], rows: dict[
                 problems.append(f"{e.name}.{f.name}: enum needs enum_values")
             if f.type == "serial" and not f.serial_prefix:
                 problems.append(f"{e.name}.{f.name}: serial needs serial_prefix")
+            if f.formula:
+                try:
+                    if bad := sorted(expr.names(f.formula) - {f"{e.name}.{n}" for n in names if n != f.name}):
+                        problems.append(f"{e.name}.{f.name}: formula uses {bad}; use other fields of {e.name}")
+                except expr.ExprError as exc:
+                    problems.append(f"{e.name}.{f.name}: {exc}")
     mapped = {normalize(m.table): m for m in model.seed}
     for table, columns in tables.items():
         mapping = mapped.get(normalize(table))
@@ -407,8 +424,11 @@ def check_screen(spec: ScreenSpec, screen: dict, model: DataModel, mod: Moderniz
     if spec.kind == "transaction" and spec.parent_lookup and spec.parent_lookup not in parent:
         problems.append(f"parent_lookup {spec.parent_lookup!r} is not a field of {spec.parent}")
     for f in spec.filters:
-        if f.field not in own:
-            problems.append(f"filter {f.legacy!r}: {f.field!r} is not a field of {spec.entity}")
+        base, _, sub = f.field.partition(".")
+        if base not in own:
+            problems.append(f"filter {f.legacy!r}: {base!r} is not a field of {spec.entity}")
+        elif sub and (own[base].type != "ref" or sub not in entities.get(own[base].ref, {})):
+            problems.append(f"filter {f.legacy!r}: {f.field!r} is not ref.field")
     serials = [f"{f.legacy!r}" for f in [*spec.filters] if own.get(f.field) and own[f.field].type == "serial"]
     serials += [f"{f.legacy!r}" for f in spec.fields if own.get(f.name) and own[f.name].type == "serial"]
     if spec.parent_lookup and parent.get(spec.parent_lookup) and parent[spec.parent_lookup].type == "serial":
@@ -448,11 +468,19 @@ def check_screen(spec: ScreenSpec, screen: dict, model: DataModel, mod: Moderniz
             problems.append(f"validation on {v.field!r}: not a form field of this screen")
         if v.rule not in rule_numbers:
             problems.append(f"validation on {v.field!r}: rule {v.rule} does not exist")
-        if not ERROR_CODE.match(v.code):
-            problems.append(f"validation on {v.field!r}: code {v.code!r} must look like 0x0042")
-        if v.check == "not_above" and not v.other:
-            problems.append(f"validation on {v.field!r}: not_above needs other")
+        if not ERROR_CODE.fullmatch(v.code):
+            problems.append(f"validation on {v.field!r}: code {v.code!r} must be the legacy error code alone, "
+                            "like 0x0042 or E-101")
+        if v.check in ("not_above", "condition") and not v.other:
+            problems.append(f"validation on {v.field!r}: {v.check} needs other")
     scope = {f"{spec.entity}.{n}" for n in own} | {f"{spec.parent}.{n}" for n in parent}
+    for v in spec.validations:
+        if v.check in ("not_above", "condition") and v.other:
+            try:
+                if unknown := sorted(expr.names(v.other) - scope):
+                    problems.append(f"validation on {v.field!r}: {v.other!r} uses unknown names {unknown}")
+            except expr.ExprError as exc:
+                problems.append(f"validation on {v.field!r}: {exc}")
     for effect in spec.effects:
         if effect.target not in {f"{spec.parent}.{n}" for n in parent}:
             problems.append(f"effect target {effect.target!r} must be {spec.parent}.<field>")
@@ -466,8 +494,8 @@ def check_screen(spec: ScreenSpec, screen: dict, model: DataModel, mod: Moderniz
                 problems.append(str(exc))
 
     # Links to other screens.
-    for a in spec.actions:
-        if a.action in ("open", "cancel") and normalize(a.target or "") not in known_screens:
+    for a in spec.actions:  # a cancel without target stays on its screen (or exits, on a login)
+        if (a.action == "open" or a.target) and normalize(a.target or "") not in known_screens:
             problems.append(f"button {a.legacy!r}: target {a.target!r} is not a legacy screen")
     if spec.success and spec.success.goto and normalize(spec.success.goto) not in known_screens:
         problems.append(f"success goto {spec.success.goto!r} is not a legacy screen")

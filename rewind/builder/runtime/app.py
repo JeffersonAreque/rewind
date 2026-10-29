@@ -238,6 +238,8 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
             failed = False
             if v["check"] == "required":
                 failed = value in (None, "")
+            elif v["check"] == "condition":  # e.g. the slot must still be free
+                failed = not expr.evaluate(v["other"], scope)
             elif value not in (None, ""):
                 own = scope.get(screen.get("entity"), {}).get(v["field"])
                 if v["check"] == "positive":
@@ -245,7 +247,8 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
                 elif v["check"] == "not_above":
                     failed = own is not None and own > expr.evaluate(v["other"], scope)
             if failed and v["field"] not in errors:
-                errors[v["field"]] = f"ERROR {v['code']}: {v['message']}"
+                # The legacy text as shown; older specs keep the code apart and get the 0x format.
+                errors[v["field"]] = v["message"] if v["code"] in v["message"] else f"ERROR {v['code']}: {v['message']}"
         return errors
 
     def read_form(screen: dict, entity: str) -> tuple[dict, dict, dict]:
@@ -260,6 +263,10 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
         return raw, values, errors
 
     def insert(entity: str, values: dict) -> int:
+        scope = {entity: {f["name"]: values.get(f["name"]) or "" for f in spec.stored(entity)}}
+        for f in spec.stored(entity):
+            if f.get("formula") and not values.get(f["name"]):
+                values[f["name"]] = " ".join(str(expr.evaluate(f["formula"], scope)).split())
         cur = db().execute(
             f"INSERT INTO {entity} ({', '.join(values)}) VALUES ({', '.join('?' * len(values))})", list(values.values())
         )
@@ -275,16 +282,19 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
             value = (filters or {}).get(f["name"])
             if not value:
                 continue
-            column = f["field"]
+            base, _, sub = f["field"].partition(".")
+            column = sub or base
             if f["op"] == "contains":
-                where.append(f"{column} LIKE ?")
+                test = f"{column} LIKE ?"
                 params.append(f"%{value}%")
             elif f["op"] == "eq":
-                where.append(f"{column} = ?")
+                test = f"{column} = ?"
                 params.append(value)
             else:
-                where.append(f"{column} {'>=' if f['op'] == 'from' else '<='} ?")
+                test = f"{column} {'>=' if f['op'] == 'from' else '<='} ?"
                 params.append(value)
+            # ref.field: the records whose linked record passes the test
+            where.append(f"{base} IN (SELECT id FROM {spec.field(entity['name'], base)['ref']} WHERE {test})" if sub else test)
         sql = f"SELECT * FROM {entity['name']}"
         if where:
             sql += " WHERE " + " AND ".join(where)
@@ -300,6 +310,9 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
         return show_value(spec, field, row[base] if field["type"] != "serial" else None, row, db())
 
     def options(entity: str, field_name: str) -> list[tuple[str, str]]:
+        base, _, sub = field_name.partition(".")
+        if sub:  # a field of the linked record, e.g. doctor.specialty
+            entity, field_name = spec.field(entity, base)["ref"], sub
         field = spec.field(entity, field_name)
         if field["type"] == "enum":
             return [(v, v) for v in field["enum_values"]]
@@ -307,6 +320,10 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
             target = spec.entities[field["ref"]]
             found = db().execute(f"SELECT id, {target['display']} AS d FROM {target['name']} ORDER BY d")
             return [(str(r["id"]), r["d"]) for r in found]
+        if field["type"] == "text":  # a list over free text: the values the records have
+            name = field["name"]
+            found = db().execute(f"SELECT DISTINCT {name} FROM {entity} WHERE {name} <> '' ORDER BY {name}")
+            return [(r[0], r[0]) for r in found]
         return []
 
     def defaults(screen: dict) -> dict:
@@ -330,8 +347,11 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
             ).fetchone()
         return {"screen": screen, "parent": parent, "values": defaults(screen), "errors": {}, "lookup": lookup or ""}
 
+    def filter_default(f: dict) -> str:
+        return today().isoformat() if f.get("default") == "today" else f.get("default") or ""
+
     def search_context(screen: dict, args) -> dict:
-        filters = {f["name"]: args.get(f["name"], "") for f in screen.get("filters", [])}
+        filters = {f["name"]: args.get(f["name"], filter_default(f)) for f in screen.get("filters", [])}
         query = {}
         for f in screen.get("filters", []):
             value = filters[f["name"]]
@@ -353,7 +373,7 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
         if screen["kind"] == "create":
             context["rows"] = rows(screen)
         if screen["kind"] == "search":
-            context |= search_context(screen, request.args)
+            context |= search_context(screen, request.values)  # a refused panel save posts the search back
             embedded = panel_for(screen)
             if embedded and request.args.get("panel") == embedded["id"] and context["selected"]:
                 context["panel"] = transaction_context(embedded, parent_id=context["selected"])
@@ -431,12 +451,15 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
         db().commit()
         goto_args = {}
         target = screen["success"].get("goto")
-        if screen["success"].get("with_parent") and target:
+        goto = spec.screens[spec.host(target)] if target else None
+        if screen["success"].get("with_parent") and goto:
             display = spec.entities[screen["parent"]]["display"]
-            goto = spec.screens[spec.host(target)]
             for f in goto.get("filters", []):
                 if f["field"] == display:
                     goto_args[f["name"]] = updated[display]
+            goto_args["sel"] = parent["id"]
+        elif goto and goto["id"] == screen.get("embedded_in"):  # back to the search the panel came from
+            goto_args = {f["name"]: request.form[f["name"]] for f in goto.get("filters", []) if f["name"] in request.form}
             goto_args["sel"] = parent["id"]
         return success(screen, **goto_args)
 

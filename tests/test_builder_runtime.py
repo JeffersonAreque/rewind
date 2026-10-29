@@ -2,6 +2,7 @@
 
 import copy
 import importlib.util
+from contextlib import closing
 import json
 import re
 import sys
@@ -99,6 +100,83 @@ def test_payment_in_merged_panel_updates_balance_and_status(client):
     page = text(client.get(done.headers["Location"]))
     assert "OPERACION COMPLETADA SATISFACTORIAMENTE." in page
     assert page.count('<tr data-id=') == 1 and "PARCIAL" in page and "S/ 340.00" in page
+
+
+def test_error_text_is_shown_as_the_legacy_app_showed_it(tmp_path, monkeypatch):
+    spec = copy.deepcopy(FIXTURE["spec"])
+    spec["screens"][1]["validations"][0] |= {"code": "E-101", "message": "E-101 DATO REQUERIDO: RUC / DNI"}
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    page = text(c.post("/p/registro-de-clientes", data={}))
+    assert "E-101 DATO REQUERIDO: RUC / DNI" in page and "ERROR E-101" not in page
+
+
+def test_a_filter_can_start_with_today_and_still_waits_for_a_search(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_TODAY", "2026-10-26")
+    spec = copy.deepcopy(FIXTURE["spec"])
+    spec["screens"][2]["filters"][3]["default"] = "today"
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    page = text(c.get("/p/busqueda-de-facturas"))
+    assert 'value="2026-10-26"' in page and page.count('<tr data-id=') == 0
+
+
+def test_formulas_fill_joined_fields_and_filters_follow_links(tmp_path, monkeypatch):
+    spec = copy.deepcopy(FIXTURE["spec"])
+    customer = next(e for e in spec["entities"] if e["name"] == "customer")
+    customer["fields"].append({"name": "label", "type": "text", "label": "Etiqueta",
+                               "formula": "customer.document + ' - ' + customer.business_name"})
+    search = spec["screens"][2]
+    search["filters"].append({"name": "doc", "label": "RUC", "legacy": "RUC", "field": "customer.document",
+                              "op": "eq", "input": "text"})
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    c.post("/p/registro-de-clientes", data={"f_document": "20612345678", "f_business_name": "FERRETERIA X",
+                                            "f_address": "JR. LORETO 455"})
+    with closing(runtime.connect(tmp_path / "app.db")) as db:
+        assert db.execute("SELECT label FROM customer WHERE document = '20612345678'").fetchone()[0] == \
+            "20612345678 - FERRETERIA X"
+    tambopata = FIXTURE["seed"]["customer"][0]["document"]
+    assert text(c.get(f"/p/busqueda-de-facturas?doc={tambopata}")).count("<tr data-id=") == 3
+
+
+def test_a_merged_panel_goes_back_to_the_same_search(tmp_path, monkeypatch):
+    spec = copy.deepcopy(FIXTURE["spec"])
+    spec["screens"][3]["success"]["with_parent"] = False
+    spec["screens"][3]["actions"].append({"label": "Cancelar", "legacy": "CANCELAR", "action": "cancel",
+                                          "target": "busqueda-de-facturas"})
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    page = c.get("/p/busqueda-de-facturas?panel=registrar-pago&sel=2&customer=1&status=PENDIENTE").get_data(as_text=True)
+    cancel = re.search(r'href="([^"]+)" data-legacy="CANCELAR"', page).group(1)
+    assert "customer=1" in cancel and "status=PENDIENTE" in cancel and "panel" not in cancel
+
+    search = {"customer": "1", "status": "PENDIENTE"}
+    refused = text(c.post("/p/registrar-pago", data={"parent": "2", "f_amount": "", "f_method": "EFECTIVO"} | search))
+    assert "0x0042" in refused and refused.count("<tr data-id=") == 3  # the results stay behind the error
+    done = c.post("/p/registrar-pago", data={"parent": "2", "f_amount": "100", "f_method": "EFECTIVO"} | search)
+    assert "customer=1" in done.headers["Location"] and "status=PENDIENTE" in done.headers["Location"]
+
+
+def test_a_condition_refuses_a_save_in_the_wrong_state(tmp_path, monkeypatch):
+    spec = copy.deepcopy(FIXTURE["spec"])
+    spec["screens"][3]["validations"].append({"field": "amount", "check": "condition", "code": "E-305",
+                                              "other": "invoice.status == 'PENDIENTE'",
+                                              "message": "E-305 SOLO FACTURAS PENDIENTES", "rule": 1})
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    payment = {"parent": "2", "f_amount": "100", "f_method": "EFECTIVO"}
+    assert c.post("/p/registrar-pago", data=payment).status_code == 302  # PENDIENTE: saved, now PARCIAL
+    assert "E-305 SOLO FACTURAS PENDIENTES" in text(c.post("/p/registrar-pago", data=payment))
+
+
+def test_a_list_over_a_text_field_offers_the_stored_values(tmp_path, monkeypatch):
+    spec = copy.deepcopy(FIXTURE["spec"])
+    number = next(f for f in spec["screens"][2]["filters"] if f["field"] == "number")
+    number["input"] = "select"
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    assert '<option value="F001-000110"' in text(c.get("/p/busqueda-de-facturas"))
 
 
 def test_today_can_be_pinned_to_the_day_of_the_recording(client, monkeypatch):

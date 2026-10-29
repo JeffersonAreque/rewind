@@ -105,6 +105,8 @@ of each table, the user's steps and the business rules.
 - A record created by a transaction screen (for example a payment) is its own entity with a ref
   to the record it updates.
 - Map every column of every legacy table (seed) to a field, or null when it is not stored.
+- A column that joins fields the form asks for separately (a full name shown from surname and first
+  name fields) is a text field with a formula, so records created in the new app fill it too.
 """ + schema_text(S.DataModel)
 
 MODERNIZE_PROMPT = """You modernize the user interface of an old business application. Its business
@@ -135,7 +137,8 @@ Rules:
   unless a remove_element change removes it, and give each a clear modern Spanish `label`.
 - Field names are entity field names from the data model.
 - Validations reproduce the legacy errors with their exact code and message and cite the number of
-  the business rule they come from.
+  the business rule they come from. A save the legacy app refused because of the state of a record
+  (already taken, already paid) is a condition: other = the safe expression that must hold to save.
 - Effects use safe expressions with entity.field names only (e.g. invoice.balance - payment.amount);
   a status uses cases, the first true case wins.
 - Apply the modernization changes that name this screen: inline_validation -> error_style "inline";
@@ -205,16 +208,46 @@ def assemble(model: S.DataModel, mod: S.Modernization, screens: list[S.ScreenSpe
     }
 
 
-def seed_records(model: S.DataModel, tables: dict[str, list[str]], rows: dict[str, list[list[str]]]) -> dict:
-    """Records per entity from the transcribed tables, in record-number order when a serial code shows it."""
+def search_values(table: str, frame: int, steps: list[dict], specs: list[S.ScreenSpec]) -> dict[str, str]:
+    """Fields every row of a search result shares: the "equals" filters typed or chosen on that
+    visit before the rows appeared (an agenda searched for one day shows only that day's slots)."""
+    spec = next((s for s in specs if s.kind == "search" and s.table and normalize(s.table.legacy) == normalize(table)), None)
+    if spec is None:
+        return {}
+    filters = {normalize(f.legacy): f for f in spec.filters if f.op == "eq"}
+    values: dict[str, str] = {}
+    for s in steps:
+        if s["frame_to"] > frame:
+            break
+        if normalize(s["screen"]) != normalize(spec.legacy):
+            continue
+        if s["action"] == "open_screen":
+            values = {}
+        elif s["action"] in ("type", "select") and s.get("value") and (f := filters.get(normalize(s["target"]))):
+            values[f.field] = s["value"]
+    return values
+
+
+def seed_records(model: S.DataModel, tables: dict[str, list[str]], rows: dict[str, list[list[str]]],
+                 shared: dict[str, dict[str, str]] | None = None) -> dict:
+    """Records per entity from the transcribed tables, in record-number order when a serial code shows it.
+
+    shared: per table, values every row has without a column for them (see search_values).
+    A record that another table names but no table lists (a doctor seen only in the agenda) is
+    created with that name.
+    """
     entities = {e.name: e for e in model.entities}
     seed = {e.name: [] for e in model.entities}
+    linked = []  # (entity, its records from one table, {"ref.field": value} every linked record shares)
     for mapping in model.seed:
         table = next((t for t in tables if normalize(t) == normalize(mapping.table)), None)
         if table is None:
             continue
         fields = {f.name: f for f in entities[mapping.entity].fields}
         given = {normalize(c): f for c, f in mapping.columns.items()}
+        values = (shared or {}).get(table, {})
+        common = {k: v for k, v in values.items() if k in fields and fields[k].type != "serial"}
+        links = {k: v for k, v in values.items() if "." in k}
         records = []
         for row in rows.get(table, []):
             record, order = {}, 0
@@ -226,8 +259,34 @@ def seed_records(model: S.DataModel, tables: dict[str, list[str]], rows: dict[st
                     order = int(re.sub(r"\D", "", cell) or 0)
                 else:
                     record[name] = cell
-            records.append((order, record))
-        seed[mapping.entity] += [r for _, r in sorted(records, key=lambda x: x[0])]
+            records.append((order, common | record))
+        ordered = [r for _, r in sorted(records, key=lambda x: x[0])]
+        seed[mapping.entity] += ordered
+        if links:
+            linked.append((mapping.entity, ordered, links))
+
+    for entity in model.entities:
+        for f in entity.fields:
+            if f.type != "ref" or f.ref not in entities:
+                continue
+            display = entities[f.ref].display
+            known = {normalize(str(r.get(display) or "")) for r in seed[f.ref]}
+            for record in seed[entity.name]:
+                if (name := record.get(f.name)) and normalize(name) not in known:
+                    seed[f.ref].append({display: name})
+                    known.add(normalize(name))
+
+    for entity, records, links in linked:  # e.g. the doctors of a pediatrics agenda are pediatricians
+        fields = {f.name: f for f in entities[entity].fields}
+        for key, value in links.items():
+            base, sub = key.split(".", 1)
+            if base not in fields or fields[base].type != "ref" or fields[base].ref not in entities:
+                continue
+            target = fields[base].ref
+            names = {normalize(str(r.get(base) or "")) for r in records} - {""}
+            for other in seed[target]:
+                if normalize(str(other.get(entities[target].display) or "")) in names:
+                    other.setdefault(sub, value)
     return seed
 
 
@@ -414,7 +473,8 @@ def run(run_dir: Path, provider: str | None = None, run_tests_after: bool = True
     for c in noop:
         log(f"  dropped no-op change: {c.kind} {c.element} (the legacy screen already did that)")
     app_spec = assemble(data_model, mod, specs, flows)
-    seed = seed_records(data_model, tables, rows)
+    shared = {t: search_values(t, found[t][0]["index"], flows["steps"], specs) for t in found}
+    seed = seed_records(data_model, tables, rows, shared)
     app_dir = run_dir / "app"
     if app_dir.exists():
         shutil.rmtree(app_dir)

@@ -48,6 +48,39 @@ def test_seed_records_follow_the_serial_order_and_skip_serials():
     assert seed["payment"] == []
 
 
+def test_rows_of_a_search_share_its_filters_and_named_records_are_created():
+    model = DataModel.model_validate({"entities": [
+        {"name": "doctor", "label": "Médico", "display": "name", "fields": [{"name": "name", "type": "text", "label": "Nombre"}]},
+        {"name": "slot", "label": "Turno", "display": "time", "fields": [
+            {"name": "time", "type": "text", "label": "Hora"}, {"name": "day", "type": "date", "label": "Fecha"},
+            {"name": "doctor", "type": "ref", "label": "Médico", "ref": "doctor"}]},
+    ], "seed": [{"table": "TURNOS", "entity": "slot", "columns": {"HORA": "time", "MEDICO": "doctor"}}]})
+    agenda = ScreenSpec.model_validate({
+        "legacy": "AGENDA", "kind": "search", "title": "Agenda", "entity": "slot",
+        "filters": [{"name": "day", "label": "Fecha", "legacy": "FECHA", "field": "day", "op": "eq", "input": "date"}],
+        "table": {"legacy": "TURNOS", "label": "Turnos", "columns": [], "selectable": True}})
+    steps = [
+        {"n": 1, "screen": "AGENDA", "action": "open_screen", "target": "AGENDA", "frame_to": 1},
+        {"n": 2, "screen": "AGENDA", "action": "type", "target": "FECHA", "value": "29/10/2026", "frame_to": 2},
+        {"n": 3, "screen": "AGENDA", "action": "click", "target": "CONSULTAR", "frame_to": 3},
+        {"n": 4, "screen": "AGENDA", "action": "type", "target": "FECHA", "value": "30/10/2026", "frame_to": 5},
+    ]
+    from rewind.agents.builder import search_values
+    shared = {"TURNOS": search_values("TURNOS", 3, steps, [agenda])}
+    assert shared == {"TURNOS": {"day": "29/10/2026"}}  # the later search does not count
+
+    rows = {"TURNOS": [["08:00", "DRA. VARGAS"], ["08:30", "DR. SALINAS"], ["09:00", "DRA. VARGAS"]]}
+    seed = seed_records(model, {"TURNOS": ["HORA", "MEDICO"]}, rows, shared)
+    assert seed["slot"][0] == {"day": "29/10/2026", "time": "08:00", "doctor": "DRA. VARGAS"}
+    assert seed["doctor"] == [{"name": "DRA. VARGAS"}, {"name": "DR. SALINAS"}]
+
+    # A filter through the link (ESPECIALIDAD = doctor.specialty) describes the linked records.
+    shared["TURNOS"]["doctor.specialty"] = "PEDIATRIA"
+    seed = seed_records(model, {"TURNOS": ["HORA", "MEDICO"]}, rows, shared)
+    assert seed["doctor"] == [{"name": "DRA. VARGAS", "specialty": "PEDIATRIA"},
+                              {"name": "DR. SALINAS", "specialty": "PEDIATRIA"}]
+
+
 def legacy_screens():
     """The fixture's screens as the model returns them: legacy names instead of page ids."""
     names = {s["id"]: s["legacy"] for s in SPEC["screens"]}

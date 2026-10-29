@@ -28,8 +28,11 @@
   {% endfor %}
 </dl>
 
+{# Inside a merged search page, the panel keeps that page's search for the way back. #}
+{% set search = filters if filters is defined and s.embedded_in == screen.id else {} %}
 <form method="post" action="{{ url_for('page', screen_id=s.id) }}" novalidate>
   <input type="hidden" name="parent" value="{{ t.parent.id }}">
+  {% for name, v in search.items() %}<input type="hidden" name="{{ name }}" value="{{ v }}">{% endfor %}
   {{ error_box(s, t.errors) }}
   <div class="form-grid">
     {% for f in s.fields %}{{ field_input(s, f, t['values'].get(f.name, ''), t.errors, entity=s.entity) }}{% endfor %}
@@ -37,7 +40,7 @@
   <div class="actions">
     {% for a in s.actions %}
       {% if a.action == 'save' %}<button type="submit" class="btn primary" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
-      {% elif a.action == 'cancel' %}<a class="btn" href="{{ url_for('page', screen_id=spec.host(a.target)) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>{% endif %}
+      {% elif a.action == 'cancel' %}{% set back = spec.host(a.target or s.id) %}<a class="btn" href="{{ url_for('page', screen_id=back, **(search if back == s.embedded_in else {})) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>{% endif %}
     {% endfor %}
   </div>
 </form>

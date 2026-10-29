@@ -30,7 +30,7 @@
             {% for a in screen.actions %}
               {% if a.action == 'save' %}<button type="submit" class="btn primary" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
               {% elif a.action == 'clear' %}<a class="btn" href="{{ url_for('page', screen_id=screen.id) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>
-              {% elif a.action == 'cancel' %}<a class="btn" href="{{ url_for('page', screen_id=spec.host(a.target)) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>{% endif %}
+              {% elif a.action == 'cancel' %}<a class="btn" href="{{ url_for('page', screen_id=spec.host(a.target or screen.id)) }}" data-legacy="{{ a.legacy }}">{{ a.label }}</a>{% endif %}
             {% endfor %}
           </div>
         </form>
