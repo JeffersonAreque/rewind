@@ -154,8 +154,12 @@ def test_a_merged_panel_goes_back_to_the_same_search(tmp_path, monkeypatch):
     search = {"customer": "1", "status": "PENDIENTE"}
     refused = text(c.post("/p/registrar-pago", data={"parent": "2", "f_amount": "", "f_method": "EFECTIVO"} | search))
     assert "0x0042" in refused and refused.count("<tr data-id=") == 3  # the results stay behind the error
-    done = c.post("/p/registrar-pago", data={"parent": "2", "f_amount": "100", "f_method": "EFECTIVO"} | search)
-    assert "customer=1" in done.headers["Location"] and "status=PENDIENTE" in done.headers["Location"]
+    kept = {"customer": "1", "status": ""}
+    done = c.post("/p/registrar-pago", data={"parent": "2", "f_amount": "100", "f_method": "EFECTIVO"} | kept)
+    assert "customer=1" in done.headers["Location"]
+    # PARCIAL now: a search for PENDIENTE would hide it, so the invoice is shown alone.
+    gone = c.post("/p/registrar-pago", data={"parent": "1", "f_amount": "100", "f_method": "EFECTIVO"} | search)
+    assert "status=" not in gone.headers["Location"] and "number=F001" in gone.headers["Location"]
 
 
 def test_a_condition_refuses_a_save_in_the_wrong_state(tmp_path, monkeypatch):

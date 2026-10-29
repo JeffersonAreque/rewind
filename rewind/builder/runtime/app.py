@@ -449,17 +449,22 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
                 [updated[n] for n in sets] + [parent["id"]],
             )
         db().commit()
-        goto_args = {}
         target = screen["success"].get("goto")
         goto = spec.screens[spec.host(target)] if target else None
-        if screen["success"].get("with_parent") and goto:
+
+        def only_parent() -> dict:
+            """The search filtered on the updated record alone."""
             display = spec.entities[screen["parent"]]["display"]
-            for f in goto.get("filters", []):
-                if f["field"] == display:
-                    goto_args[f["name"]] = updated[display]
-            goto_args["sel"] = parent["id"]
-        elif goto and goto["id"] == screen.get("embedded_in"):  # back to the search the panel came from
+            return {f["name"]: updated[display] for f in goto.get("filters", []) if f["field"] == display}
+
+        goto_args = {}
+        if screen["success"].get("with_parent") and goto:
+            goto_args = only_parent() | {"sel": parent["id"]}
+        elif goto and goto["id"] == screen.get("embedded_in"):
+            # Back to the search the panel came from, while it still shows the record it changed.
             goto_args = {f["name"]: request.form[f["name"]] for f in goto.get("filters", []) if f["name"] in request.form}
+            if parent["id"] not in {r["id"] for r in search_context(goto, goto_args)["rows"]}:
+                goto_args = only_parent()
             goto_args["sel"] = parent["id"]
         return success(screen, **goto_args)
 
