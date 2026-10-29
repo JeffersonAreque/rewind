@@ -226,6 +226,24 @@ Verifica la app sana y 3 copias rotas en `runs/<id>/eval/`. La app sana no debe 
 
 Las copias solo pagan las capturas que cambian: unos 34 mil tokens en total. Repetir cuesta 0.
 
+## Todo de una vez: `rewind run` e informe HTML
+
+```
+uv run python -m rewind run video.mp4      # los 4 agentes y runs/<id>/report.html
+uv run python -m rewind report runs/<id>   # solo el informe, sin llamar al modelo
+```
+
+`rewind/report.py` solo lee lo que ya escribieron los agentes, así que cuesta 0 tokens. Arma un solo archivo HTML (plantilla en `rewind/templates/report.html`) con:
+- cada pantalla antigua junto a la misma pantalla en la app nueva;
+- los flujos, con el veredicto de cada paso;
+- las reglas de negocio y si pasaron la verificación;
+- los cambios de modernización, descritos desde lo construido;
+- la verificación paso a paso, con las dos imágenes y las diferencias.
+
+Las imágenes van adentro en base64 y cada una se guarda una sola vez aunque aparezca varias veces: unos 4 MB en el video de ejemplo. Si a la corrida le falta una parte (aún no se construyó o no se verificó), el informe la omite.
+
+Si el proveedor rechaza la clave, el comando termina con un mensaje claro. Lo ya hecho queda en caché, así que al repetir sigue donde se quedó.
+
 ## Proveedor de modelos
 
 Muse Spark se usa a través de Baseten o Fireworks. Los dos tienen una API compatible con la de OpenAI, así que un proveedor se define con tres datos: URL base, clave y nombre del modelo.

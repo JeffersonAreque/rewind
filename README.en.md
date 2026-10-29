@@ -71,6 +71,15 @@ Test the provider with one text call and one vision call (a frame of the sample 
 uv run python scripts/check_provider.py
 ```
 
+All at once: the 4 agents on one video and a single HTML report (`runs/<id>/report.html`) with the screens before and after, the workflows, rules, changes and the step-by-step verification. The report is one file with the images inside; `report` writes it again without calling the model:
+
+```
+uv run python -m rewind run samples/facturacion-demo.mp4
+uv run python -m rewind report runs/<id>
+```
+
+Each agent can also be run on its own.
+
 Agent 1, screens (needs ffmpeg). Reads the video and writes `runs/<id>/screens.json` plus the keyframes; `--dry-run` only extracts the keyframes and spends no credits:
 
 ```

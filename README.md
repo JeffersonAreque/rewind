@@ -72,6 +72,15 @@ Probar el proveedor con una llamada de texto y otra de visión (un cuadro del vi
 uv run python scripts/check_provider.py
 ```
 
+Todo de una vez: los 4 agentes sobre un video y un solo informe HTML (`runs/<id>/report.html`) con las pantallas antes y después, los flujos, las reglas, los cambios y la verificación paso a paso. El informe es un solo archivo con las imágenes adentro; `report` lo vuelve a escribir sin llamar al modelo:
+
+```
+uv run python -m rewind run samples/facturacion-demo.mp4
+uv run python -m rewind report runs/<id>
+```
+
+Cada agente también se puede correr por separado.
+
 Agente 1, pantallas (requiere ffmpeg). Analiza el video y guarda `runs/<id>/screens.json` más los cuadros clave; con `--dry-run` solo extrae los cuadros, sin gastar créditos:
 
 ```
