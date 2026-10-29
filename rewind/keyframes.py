@@ -23,7 +23,7 @@ class Settings:
     fps: float = 10  # frames per second to compare
     pixel_delta: int = 24  # grey levels a pixel must change to count as changed
     still_pixels: int = 2  # at most this many changed pixels between frames = still
-    still_seconds: float = 0.4  # how long the screen must stay still
+    still_seconds: float = 0.2  # how long the screen must stay still (a fast user rests ~0.3 s on a message)
     min_change: int = 60  # changed pixels vs the last keyframe to keep a new one
 
 

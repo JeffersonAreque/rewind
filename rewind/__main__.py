@@ -188,7 +188,7 @@ def main() -> int:
     screens.add_argument("--dry-run", action="store_true", help="only extract keyframes, no model calls")
     screens.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
     screens.add_argument("--max-frames", type=int, help="analyse at most this many keyframes")
-    screens.add_argument("--still", type=float, default=0.4, help="seconds the screen must stay still (default 0.4)")
+    screens.add_argument("--still", type=float, default=0.2, help="seconds the screen must stay still (default 0.2)")
     screens.add_argument("--min-change", type=int, default=60,
                          help="changed pixels at 320x180 to count as a new keyframe (default 60)")
     screens.set_defaults(func=cmd_screens)
@@ -218,7 +218,7 @@ def main() -> int:
     run.add_argument("--out", type=Path, default=ROOT / "runs", help="folder for the run (default runs/)")
     run.add_argument("--provider", choices=PROVIDERS, help="override REWIND_PROVIDER")
     run.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
-    run.add_argument("--still", type=float, default=0.4, help="seconds the screen must stay still (default 0.4)")
+    run.add_argument("--still", type=float, default=0.2, help="seconds the screen must stay still (default 0.2)")
     run.add_argument("--min-change", type=int, default=60,
                      help="changed pixels at 320x180 to count as a new keyframe (default 60)")
     run.set_defaults(func=cmd_run)
