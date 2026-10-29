@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+from openai import AuthenticationError
+
 from rewind.config import PROVIDERS, ROOT, load_provider
 
 
@@ -134,6 +136,43 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 1 if s["fail"] or r["fail"] else 0
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    from rewind import report
+
+    print(report.write(args.run))
+    return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """The whole pipeline on one video, then report.html."""
+    from rewind import report
+    from rewind.agents import builder, flows, screens, verifier
+    from rewind.keyframes import Settings
+
+    if not args.video.is_file():
+        raise ValueError(f"video not found: {args.video}")
+    settings = Settings(still_seconds=args.still, min_change=args.min_change)
+    print("== Agent 1: screens")
+    run_dir = screens.run(args.video, args.out, args.provider, workers=args.workers, settings=settings)
+    print("\n== Agent 2: flows")
+    flows.run(run_dir, args.provider, args.workers)
+    print("\n== Agent 3: builder")
+    builder.run(run_dir, args.provider, True, args.workers)
+    print("\n== Agent 4: verifier")
+    result = json.loads(verifier.run(run_dir, provider=args.provider, workers=args.workers).read_text(encoding="utf-8"))
+
+    tokens = 0
+    for path in ("screens.json", "flows.json", "app/build.json", "verification.json"):
+        tokens += json.loads((run_dir / path).read_text(encoding="utf-8"))["tokens"]["total"]
+    s, r = result["summary"]["steps"], result["summary"]["rules"]
+    print(f"\nVerification: steps {s['pass']} pass, {s['fail']} fail, {s['unclear']} unclear, "
+          f"{s['absorbed']} absorbed; rules {r['pass']} pass, {r['fail']} fail, {r['unclear']} unclear")
+    print(f"Tokens this run: {tokens}")
+    print(f"\nReport:  {report.write(run_dir)}")
+    print(f"New app: uv run python {run_dir / 'app' / 'app.py'}")
+    return 1 if s["fail"] or r["fail"] else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="rewind", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -174,11 +213,30 @@ def main() -> int:
     verify.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
     verify.set_defaults(func=cmd_verify)
 
+    run = commands.add_parser("run", help="the whole pipeline on a video: 4 agents, then report.html")
+    run.add_argument("video", type=Path, help="screen recording (MP4)")
+    run.add_argument("--out", type=Path, default=ROOT / "runs", help="folder for the run (default runs/)")
+    run.add_argument("--provider", choices=PROVIDERS, help="override REWIND_PROVIDER")
+    run.add_argument("--workers", type=int, default=4, help="model calls in parallel (default 4)")
+    run.add_argument("--still", type=float, default=0.4, help="seconds the screen must stay still (default 0.4)")
+    run.add_argument("--min-change", type=int, default=60,
+                     help="changed pixels at 320x180 to count as a new keyframe (default 60)")
+    run.set_defaults(func=cmd_run)
+
+    report = commands.add_parser("report", help="write runs/<id>/report.html from what the agents wrote (no API calls)")
+    report.add_argument("run", type=Path, help="run folder (runs/<id>)")
+    report.set_defaults(func=cmd_report)
+
     args = parser.parse_args()
     try:
         return args.func(args)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except AuthenticationError:
+        provider = load_provider(getattr(args, "provider", None))
+        print(f"error: {provider.name} rejected the API key (401); check it in .env. "
+              "Finished steps are cached, so running again resumes where this stopped.", file=sys.stderr)
         return 2
 
 
