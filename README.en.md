@@ -31,6 +31,7 @@ More detail in [docs/arquitectura.md](docs/arquitectura.md) (Spanish).
 | Agent 2: flows | Done: 29/29 steps, 11/11 values, 4/4 workflows and 7/7 rules on the sample video |
 | Agent 3: builder | Done: modern app with 7 justified changes; 4/4 workflows replayed successfully |
 | Agent 4: verifier | Done: 24/26 steps pass, 2 unclear, 10/10 rules; catches 3 of 3 broken copies of the app |
+| Second app: clinic appointments, recorded fast | Done: 99% screens, 100% flows, 4/4 workflows replayed, 35/38 steps verified with no fails; catches 3 of 3 broken copies |
 
 ## Stack
 
@@ -75,6 +76,7 @@ All at once: the 4 agents on one video and a single HTML report (`runs/<id>/repo
 
 ```
 uv run python -m rewind run samples/facturacion-demo.mp4
+uv run python -m rewind run samples/clinica-demo.mp4 --still 0.2    # fast recording: shorter pauses
 uv run python -m rewind report runs/<id>
 ```
 
@@ -117,7 +119,8 @@ uv run pytest
 ## Layout
 
 ```
-legacy-demo/   sample legacy app (Flask + SQLite + 98.css)
+legacy-demo/   sample legacy app: billing (Flask + SQLite + 98.css)
+legacy-clinica/ second legacy app: clinic appointments, another look and other rules
 rewind/        Python agent pipeline
 docs/          architecture and recording guide
 samples/       input video, expected answers and a sample spec

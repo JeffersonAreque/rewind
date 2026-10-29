@@ -245,6 +245,46 @@ Las imágenes van adentro en base64 y cada una se guarda una sola vez aunque apa
 
 Si el proveedor rechaza la clave, el comando termina con un mensaje claro. Lo ya hecho queda en caché, así que al repetir sigue donde se quedó.
 
+## Segunda prueba: citas de una clínica, grabada rápido
+
+Para comprobar que Rewind no está ajustado a un solo video, `legacy-clinica/` es otro programa antiguo, distinto a propósito:
+- es de otro rubro y tiene otra estética: ventana a pantalla completa con teclas F2 / F3 / F10 en vez de menús;
+- sus errores usan otro formato (`E-101 DATO REQUERIDO: APELLIDOS`);
+- abre en la agenda y no en el primer menú;
+- tiene una columna que junta dos campos (APELLIDOS Y NOMBRES);
+- tiene una regla que la facturación no tiene: un turno ya tomado no se puede reservar (`E-305`).
+
+El video (`samples/clinica-demo.mp4`, 31 s) se grabó como trabaja una persona de verdad: clics y tipeo rápidos, casi sin pausas, un error de tipeo corregido con retroceso, un campo olvidado y un turno ya tomado.
+
+```
+uv run python scripts/record_demo.py --app clinica --fast
+uv run python -m rewind run samples/clinica-demo.mp4 --still 0.2
+uv run python scripts/eval_screens.py runs/<id> --expected samples/clinica-demo.expected.json
+uv run python scripts/eval_flows.py runs/<id> --expected samples/clinica-demo.expected-flows.json
+uv run python scripts/eval_verifier.py runs/<id>
+```
+
+**Cuadros clave.** Con 0,4 s de quietud salen 14 cuadros y se pierden casi todos los mensajes, porque la persona los cierra en 0,3 s. Con `--still 0.2` salen 20, uno por cada estado. En el video de facturación, 0,2 da 20 cuadros en vez de 17, así que el valor por defecto sigue en 0,4 hasta medir los dos videos con el mismo ajuste.
+
+**Lo que la clínica destapó.** Cada problema se arregló de forma general, sin código para la clínica:
+- **Códigos de error:** se buscaban solo con forma `0x0042`; ahora también `E-101`, `ORA-00001` o `SQL0803`, y la app nueva muestra el texto del error tal como lo mostraba el programa antiguo.
+- **Lo que pasa antes del primer cuadro:** la persona ya había escrito usuario y clave cuando la pantalla se quedó quieta por primera vez. Los valores del primer cuadro del video ahora cuentan como pasos tipeados, no como valores por defecto.
+- **Respuestas cortadas:** el modelo de datos de la clínica razonaba más de 12 mil tokens y la respuesta llegaba vacía. El límite subió a 24 mil, y una respuesta cortada se reintenta pidiendo razonar menos.
+- **Datos iniciales:** los turnos no tienen columna de fecha ni de especialidad; esos valores son la búsqueda que se hizo antes de ver las filas (PEDIATRIA, 29/10/2026), así que se copian a cada fila. Un médico que solo aparece por su nombre en la agenda se crea con ese nombre.
+- **Lo que el spec no podía decir:** un campo calculado (`formula`, para APELLIDOS Y NOMBRES); un filtro por un campo de otro registro (`doctor.specialty`); un filtro que empieza con un valor (FECHA = hoy); una lista sobre un campo de texto, que ofrece los valores guardados; y una validación `condition` (el turno debe seguir LIBRE).
+- **Página unida:** al cancelar o al fallar una reserva en el panel, la agenda vuelve con la misma búsqueda, como en el programa antiguo.
+- **Repetición:** cada paso busca solo el tipo de elemento que usa (un campo, una lista o un botón), porque en la página unida PACIENTE es a la vez columna y campo. Una fila leída con poca confianza se prueba también con sus otras lecturas.
+- **Verificación:** el largo de la clave enmascarada no cuenta, porque la prueba usa su propia clave.
+
+**Resultado:**
+- **Pantallas:** 99 % de acierto (99/100; una fecha de solo lectura se leyó como texto) y 100 % de precisión.
+- **Flujos:** 41/41 pasos, 12/12 valores, 4/4 flujos y 6/6 reglas. La agrupación en flujos cambió entre corridas: una vez juntó la búsqueda con el intento fallido (2/4).
+- **Constructor:** 4/4 flujos repetidos con éxito y 35 de 35 elementos antiguos conservados.
+- **Verificador:** 35 pasos pasan, 0 fallan y 3 quedan dudosos, porque el aviso CITA RESERVADA tapa el nombre del paciente en el video. 10 de 12 reglas pasan y 2 quedan dudosas.
+- **Copias rotas:** detecta las 3. Sin APELLIDOS obligatorio falla el paso del `E-101`; sin el control del turno tomado falla el del `E-305`. Si la reserva no marca el turno como RESERVADA, la prueba no lo nota (la página sigue diciendo RESERVADA en otras filas): lo detecta solo Muse Spark al comparar las capturas (09:30 sigue LIBRE).
+- **Facturación:** después de estos cambios, su verificación y sus 3 copias rotas siguen pasando.
+- **Costo:** unos 1,2 millones de tokens en total, incluidas cuatro reconstrucciones mientras se arreglaba lo anterior. Repetir cuesta 0.
+
 ## Proveedor de modelos
 
 Muse Spark se usa a través de Baseten o Fireworks. Los dos tienen una API compatible con la de OpenAI, así que un proveedor se define con tres datos: URL base, clave y nombre del modelo.
@@ -260,4 +300,4 @@ REWIND_PROVIDER=baseten   # o fireworks
 
 ## App de ejemplo
 
-`legacy-demo/` es el "programa antiguo" que se graba para la demo: un sistema de facturación con estética de Windows 98 (Flask + SQLite + 98.css). Rewind no lee su código; solo ve el video.
+`legacy-demo/` es el "programa antiguo" que se graba para la demo: un sistema de facturación con estética de Windows 98 (Flask + SQLite + 98.css). `legacy-clinica/` es el segundo: citas de una clínica. Rewind no lee el código de ninguno de los dos; solo ve el video.

@@ -32,6 +32,7 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 | Agente 2: flujos | Listo: 29/29 pasos, 11/11 valores, 4/4 flujos y 7/7 reglas en el video de ejemplo |
 | Agente 3: constructor | Listo: app moderna con 7 cambios justificados; 4/4 flujos repetidos con éxito |
 | Agente 4: verificador | Listo: 24/26 pasos pasan, 2 dudosos, 10/10 reglas; detecta 3 de 3 copias rotas de la app |
+| Segunda app: citas de una clínica, grabada rápido | Lista: 99 % pantallas, 100 % flujos, 4/4 flujos repetidos, 35/38 pasos verificados sin fallas; detecta 3 de 3 copias rotas |
 
 ## Tecnologías
 
@@ -76,6 +77,7 @@ Todo de una vez: los 4 agentes sobre un video y un solo informe HTML (`runs/<id>
 
 ```
 uv run python -m rewind run samples/facturacion-demo.mp4
+uv run python -m rewind run samples/clinica-demo.mp4 --still 0.2    # grabación rápida: pausas más cortas
 uv run python -m rewind report runs/<id>
 ```
 
@@ -118,7 +120,8 @@ uv run pytest
 ## Estructura
 
 ```
-legacy-demo/   app antigua de ejemplo (Flask + SQLite + 98.css)
+legacy-demo/   app antigua de ejemplo: facturación (Flask + SQLite + 98.css)
+legacy-clinica/ segunda app antigua: citas de una clínica, otra estética y otras reglas
 rewind/        pipeline de agentes en Python
 docs/          arquitectura y guía de grabación
 samples/       video de entrada, respuestas esperadas y un spec de ejemplo
