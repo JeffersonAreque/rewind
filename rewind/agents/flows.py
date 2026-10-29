@@ -23,7 +23,7 @@ from typing import Literal
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from rewind.agents.screens import FrameAnalysis, normalize
+from rewind.agents.screens import PLACEHOLDER, FrameAnalysis, normalize
 from rewind.config import ROOT, load_provider
 from rewind.llm import TokenCount, ask_json, cache_key, cached, image_url, make_client
 
@@ -150,7 +150,8 @@ def read_pairs(client: OpenAI, model: str, frames: list[dict], run_dir: Path, wo
 
 # ---------- Steps ----------
 
-ERROR_CODE = re.compile(r"0x[0-9A-F]{2,8}", re.IGNORECASE)
+# Codes in error and warning messages, in the shapes old programs use: 0x0042, E-101, ORA-00001, SQL0803.
+ERROR_CODE = re.compile(r"\b(?:0x[0-9A-F]{2,8}|[A-Z]{1,4}-\d{2,6}|[A-Z]{2,4}\d{3,6})\b", re.IGNORECASE)
 SIMILAR = 0.8  # difflib ratio from which two readings count as the same value misread
 
 
@@ -193,6 +194,23 @@ def find_reread(steps: list[Step], action, screen: str) -> Step | None:
     return None
 
 
+def typed_before(first: dict) -> list[Step]:
+    """Values already in the editable fields of the recording's first keyframe: the user typed
+    or chose them before the screen first stood still (a fast login), so they are steps."""
+    a, steps = first["analysis"], []
+    where = {"frame_from": first["index"], "frame_to": first["index"], "time_from": first["time"], "time_to": first["time"]}
+    for f in (f for s in a.sections for f in s.fields):
+        if not f.editable or not f.value or PLACEHOLDER.match(normalize(f.value)):
+            continue
+        secret = f.type == "password"
+        steps.append(Step(
+            screen=a.screen_name, action="select" if f.type in ("select", "radio") else "type", target=f.label,
+            element=f.type, value=None if secret else f.value, value_visible=not secret,
+            readings=[] if secret else [{"source": f"frame {first['index']}", "value": f.value}], **where,
+        ))
+    return steps
+
+
 def build_steps(frames: list[dict], pairs: list[dict]) -> list[Step]:
     """Ordered user steps: the model's actions for each pair plus the facts Agent 1
     already knows (screen changes and messages), which need no guessing."""
@@ -200,7 +218,7 @@ def build_steps(frames: list[dict], pairs: list[dict]) -> list[Step]:
     steps = [Step(
         screen=first["analysis"].screen_name, action="open_screen", target=first["analysis"].screen_name,
         frame_from=first["index"], frame_to=first["index"], time_from=first["time"], time_to=first["time"],
-    )]
+    ), *typed_before(first)]
     by_index = {f["index"]: f for f in frames}
     for pair in pairs:
         before, after = by_index[pair["from"]]["analysis"], by_index[pair["to"]]["analysis"]
@@ -223,7 +241,7 @@ def build_steps(frames: list[dict], pairs: list[dict]) -> list[Step]:
         if normalize(after.screen_name) != normalize(before.screen_name):
             steps.append(Step(screen=after.screen_name, action="open_screen", target=after.screen_name, **where))
         if after.dialog and (not before.dialog or normalize(before.dialog.message) != normalize(after.dialog.message)):
-            code = ERROR_CODE.search(after.dialog.message)
+            code = ERROR_CODE.search(after.dialog.message) if after.dialog.kind in ("error", "warning") else None
             steps.append(Step(
                 screen=after.screen_name, action="see_message", target=after.dialog.message,
                 element=after.dialog.kind, code=code.group(0) if code else None, **where,

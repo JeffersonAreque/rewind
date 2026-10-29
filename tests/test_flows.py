@@ -82,6 +82,27 @@ def test_steps_add_screen_changes_and_messages():
     assert steps[4].code == "0x0042" and steps[4].element == "error"
 
 
+def test_values_typed_before_the_first_keyframe_are_steps():
+    first = make_frame(0, 2.8, "ACCESO", fields={"OPERADOR": "RECEPCION", "CONTRASENA": "******", "FECHA": "DD/MM/AAAA"})
+    first["analysis"].sections[0].fields[1].type = "password"
+    later = make_frame(1, 4.0, "AGENDA")
+    steps = build_steps([first, later], [pair(0, 1, {"action": "click", "target": "INGRESAR", "element": "button"})])
+    assert [(s.action, s.target, s.value) for s in steps[:4]] == [
+        ("open_screen", "ACCESO", None), ("type", "OPERADOR", "RECEPCION"), ("type", "CONTRASENA", None),
+        ("click", "INGRESAR", None)]
+    assert not steps[2].value_visible
+
+
+def test_error_codes_in_the_shapes_old_programs_use():
+    from rewind.agents.flows import ERROR_CODE
+
+    for message, code in [("ERROR 0x0042: CAMPO OBLIGATORIO", "0x0042"), ("E-101 DATO REQUERIDO: DNI", "E-101"),
+                          ("ORA-00001: UNIQUE CONSTRAINT", "ORA-00001"), ("SQL0803 DUPLICADO", "SQL0803")]:
+        assert ERROR_CODE.search(message).group(0) == code
+    for message in ("FACTURA F001-000110 NO EXISTE", "FECHA 29/10/2026 INVALIDA", "TURNO 09:30 NO DISPONIBLE"):
+        assert ERROR_CODE.search(message) is None, message
+
+
 def test_field_read_in_two_pairs_is_one_step():
     frames = [make_frame(i, float(i), "CLIENTES") for i in range(3)]
     typed = {"action": "type", "target": "RAZON SOCIAL", "element": "field"}

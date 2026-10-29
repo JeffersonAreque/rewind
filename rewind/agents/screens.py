@@ -134,6 +134,10 @@ def normalize(text: str) -> str:
     return " ".join(text.upper().replace(":", " ").split()).rstrip(" .")
 
 
+# A field showing one of these holds no value: (TODOS), [TODAS], DD/MM/AAAA (match normalized text).
+PLACEHOLDER = re.compile(r"^[\[(].*[\])]$|^[DMAY/ -]+$")
+
+
 def most_common(values: list):
     return Counter(values).most_common(1)[0][0]
 
