@@ -70,6 +70,8 @@ def test_evidence_names_the_later_steps_inside_the_same_keyframe():
     assert "LATER STEPS" not in step_evidence(STEPS[2], STEPS, [])
     password = step(6, "type", "CLAVE", 5, confidence="masked")
     assert "own test password" in step_evidence(password, STEPS, []) and "own test" not in text
+    assert "narrower than its value" in text  # STEPS[0] types a value
+    assert "narrower" not in step_evidence(STEPS[1], STEPS, [])
 
 
 def test_comparisons_are_cached_by_image(tmp_path, monkeypatch):

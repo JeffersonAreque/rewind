@@ -95,6 +95,9 @@ def step_evidence(step: dict, steps: list[dict], changes: list[str]) -> str:
     if step.get("confidence") == "masked":
         text += ("\nThe new app was replayed with its own test password, so the number of mask characters "
                  "differs on purpose and is never a difference.")
+    elif step["action"] == "type":
+        text += ("\nA text field narrower than its value shows only part of it (the end, while the cursor is "
+                 "in it); the value was typed in full, so a cut-off display is not a difference.")
     if later:
         text += "\n\nLATER STEPS ALSO DONE BEFORE IMAGE 1 WAS TAKEN (not yet in Image 2)\n" + "\n".join(map(describe, later))
     text += "\n\nMODERNIZATION CHANGES (never differences)\n" + "\n".join(f"{i}. {c}" for i, c in enumerate(changes, 1))
