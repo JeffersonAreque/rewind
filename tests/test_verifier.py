@@ -68,6 +68,8 @@ def test_evidence_names_the_later_steps_inside_the_same_keyframe():
     assert "3." not in text.split("LATER STEPS")[1].split("MODERNIZATION")[0]
     assert "1. inline_validation: dialog -> under the field" in text
     assert "LATER STEPS" not in step_evidence(STEPS[2], STEPS, [])
+    password = step(6, "type", "CLAVE", 5, confidence="masked")
+    assert "own test password" in step_evidence(password, STEPS, []) and "own test" not in text
 
 
 def test_comparisons_are_cached_by_image(tmp_path, monkeypatch):

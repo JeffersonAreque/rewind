@@ -92,6 +92,9 @@ def step_evidence(step: dict, steps: list[dict], changes: list[str]) -> str:
     later = [s for s in steps if s["n"] > step["n"] and s["frame_to"] == step["frame_to"]]
     text = "STEPS BEFORE (done in both apps)\n" + ("\n".join(map(describe, before)) or "none")
     text += "\n\nTHIS STEP\n" + describe(step)
+    if step.get("confidence") == "masked":
+        text += ("\nThe new app was replayed with its own test password, so the number of mask characters "
+                 "differs on purpose and is never a difference.")
     if later:
         text += "\n\nLATER STEPS ALSO DONE BEFORE IMAGE 1 WAS TAKEN (not yet in Image 2)\n" + "\n".join(map(describe, later))
     text += "\n\nMODERNIZATION CHANGES (never differences)\n" + "\n".join(f"{i}. {c}" for i, c in enumerate(changes, 1))
