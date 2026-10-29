@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }} - SISTEMA DE CITAS</title>
+  <link rel="icon" href="{{ url_for('static', filename='cross.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('shared', name='vendor/98css/98.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='clinica.css') }}">
+</head>
+<body class="screen">
+  {% block screen %}{% endblock %}
+
+  {% if dialog %}
+  <div class="modal" id="dialog" data-focus="{{ dialog.focus or '' }}">
+    <div class="window dialog" role="alertdialog" aria-labelledby="dialog-title">
+      <div class="title-bar">
+        <div class="title-bar-text" id="dialog-title">MENSAJE DEL SISTEMA</div>
+      </div>
+      <div class="window-body">
+        <img src="{{ url_for('shared', name='icons/' ~ dialog.kind ~ '.svg') }}" width="32" height="32" alt="">
+        <p class="message">{{ dialog.message }}</p>
+      </div>
+      <div class="actions"><button data-close>ACEPTAR</button></div>
+    </div>
+  </div>
+  {% endif %}
+  <script src="{{ url_for('static', filename='clinica.js') }}"></script>
+</body>
+</html>

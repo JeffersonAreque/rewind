@@ -1,0 +1,79 @@
+/* Full-screen Windows 9x program on top of 98.css. Designed for a 1280x720 screen. */
+
+html, body { height: 100%; margin: 0; }
+
+body.screen {
+  background: #1f3b63;
+  font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+  font-size: 11px;
+  -webkit-font-smoothing: none;
+  text-transform: uppercase;
+  overflow: hidden;
+  cursor: default;
+}
+
+input[type="text"], select, button { text-transform: uppercase; }
+body.busy, body.busy * { cursor: url("/shared/icons/hourglass.svg") 16 16, wait !important; }
+
+.title-bar-text { display: flex; align-items: center; gap: 4px; }
+.title-bar-text img { width: 16px; height: 16px; }
+
+/* ---------- Main window: fills the screen ---------- */
+
+.window.full { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.window.full > .window-body { flex: 1; margin: 0; padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+
+.toolbar { display: flex; gap: 2px; padding: 3px 4px; border-bottom: 1px solid #808080; box-shadow: 0 1px #fff; }
+.toolbar .key {
+  color: #000; text-decoration: none; padding: 3px 10px;
+  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+  background: #c0c0c0;
+}
+.toolbar .key b { color: #000080; margin-right: 4px; }
+.toolbar .key:active { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080; }
+
+.banner {
+  margin: 0; padding: 6px 10px; font-size: 14px; font-weight: bold; letter-spacing: 1px;
+  color: #fff; background: linear-gradient(90deg, #006666, #20a0a0);
+}
+
+/* ---------- Forms ---------- */
+
+.row { display: flex; gap: 10px; align-items: flex-start; }
+.row.end { justify-content: flex-end; }
+.column { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
+.column button, .row.end button { min-width: 96px; }
+.grow { flex: 1; min-width: 0; }
+
+.grid { display: grid; gap: 6px 10px; align-items: center; }
+.grid.two { grid-template-columns: 110px 1fr 110px 1fr; }
+.grid.one { grid-template-columns: 110px 420px; }
+.grid.login-grid { grid-template-columns: 90px 1fr; margin: 10px 0; }
+.grid input[type="text"], .grid input[type="password"], .grid select { width: 100%; box-sizing: border-box; }
+.radios { display: flex; gap: 14px; align-items: center; }
+
+input.readonly { background: #c0c0c0; color: #000; }
+
+/* ---------- Tables ---------- */
+
+fieldset.grow { display: flex; flex-direction: column; min-height: 0; }
+.sunken-panel { flex: 1; height: auto; min-height: 120px; background: #fff; overflow: auto; }
+.grid-table { width: 100%; border-collapse: collapse; }
+.grid-table th { position: sticky; top: 0; text-align: left; }
+.grid-table td { padding: 2px 6px; white-space: nowrap; }
+.grid-table.interactive tbody tr { cursor: default; }
+.grid-table tr.highlighted td { background: #000080; color: #fff; }
+
+/* ---------- Login ---------- */
+
+.window.login { width: 380px; margin: 210px auto 0; }
+.brand { text-align: center; font-weight: bold; font-size: 13px; color: #000080; margin: 6px 0 4px; }
+
+/* ---------- Message box ---------- */
+
+.modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+.dialog { width: 400px; }
+.dialog .window-body { display: flex; gap: 14px; align-items: center; padding: 14px 10px; }
+.dialog .message { margin: 0; font-size: 12px; }
+.dialog .actions { display: flex; justify-content: center; padding: 0 0 10px; }
+.dialog .actions button { min-width: 90px; }

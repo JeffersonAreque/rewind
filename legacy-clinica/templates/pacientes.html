@@ -1,0 +1,45 @@
+{% extends "shell.html" %}
+{% block body %}
+<form method="post" action="{{ url_for('pacientes') }}" autocomplete="off" class="row">
+  <fieldset class="grow">
+    <legend>DATOS DEL PACIENTE</legend>
+    <div class="grid two">
+      <label for="dni">DNI:</label>
+      <input type="text" id="dni" name="dni" value="{{ form.dni }}" maxlength="8" autofocus>
+      <label for="fecha_nac">FECHA NAC.:</label>
+      <input type="text" id="fecha_nac" name="fecha_nac" value="{{ form.fecha_nac }}" maxlength="10" placeholder="DD/MM/AAAA">
+      <label for="apellidos">APELLIDOS:</label>
+      <input type="text" id="apellidos" name="apellidos" value="{{ form.apellidos }}" maxlength="40">
+      <label for="telefono">TELEFONO:</label>
+      <input type="text" id="telefono" name="telefono" value="{{ form.telefono }}" maxlength="15">
+      <label for="nombres">NOMBRES:</label>
+      <input type="text" id="nombres" name="nombres" value="{{ form.nombres }}" maxlength="40">
+      <label>SEGURO:</label>
+      <div class="radios">
+        {% for s in seguros %}
+        <input type="radio" id="seguro-{{ loop.index }}" name="seguro" value="{{ s }}" {{ 'checked' if form.seguro == s }}>
+        <label for="seguro-{{ loop.index }}">{{ s }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  </fieldset>
+  <div class="column">
+    <button type="submit">GRABAR</button>
+    <button type="button" data-cancel onclick="location.href='{{ url_for('pacientes') }}'">NUEVO</button>
+  </div>
+</form>
+
+<fieldset class="grow">
+  <legend>PACIENTES REGISTRADOS</legend>
+  <div class="sunken-panel">
+    <table class="grid-table">
+      <thead><tr><th>H.C.</th><th>DNI</th><th>APELLIDOS Y NOMBRES</th><th>SEGURO</th><th>TELEFONO</th></tr></thead>
+      <tbody>
+        {% for p in lista %}
+        <tr><td>HC-{{ '%04d' % p.id }}</td><td>{{ p.dni }}</td><td>{{ p.apellidos }} {{ p.nombres }}</td><td>{{ p.seguro }}</td><td>{{ p.telefono }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</fieldset>
+{% endblock %}

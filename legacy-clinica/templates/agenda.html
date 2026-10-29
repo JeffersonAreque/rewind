@@ -1,0 +1,53 @@
+{% extends "shell.html" %}
+{% block body %}
+<form method="get" action="{{ url_for('agenda') }}" autocomplete="off" class="row">
+  <input type="hidden" name="consultar" value="1">
+  <fieldset class="grow">
+    <legend>CRITERIOS</legend>
+    <div class="grid two">
+      <label for="especialidad">ESPECIALIDAD:</label>
+      <select id="especialidad" name="especialidad">
+        <option value="">(TODAS)</option>
+        {% for e in especialidades %}<option value="{{ e }}" {{ 'selected' if form.especialidad == e }}>{{ e }}</option>{% endfor %}
+      </select>
+      <label for="fecha">FECHA:</label>
+      <input type="text" id="fecha" name="fecha" value="{{ form.fecha }}" maxlength="10" placeholder="DD/MM/AAAA">
+      <label for="medico">MEDICO:</label>
+      <select id="medico" name="medico">
+        <option value="">(TODOS)</option>
+        {% for m in medicos %}<option value="{{ m.id }}" {{ 'selected' if form.medico == m.id|string }}>{{ m.nombre }}</option>{% endfor %}
+      </select>
+      <label for="estado">ESTADO:</label>
+      <select id="estado" name="estado">
+        {% for e in estados %}<option value="{{ e }}" {{ 'selected' if form.estado == e }}>{{ e or '(TODOS)' }}</option>{% endfor %}
+      </select>
+    </div>
+  </fieldset>
+  <div class="column">
+    <button type="submit">CONSULTAR</button>
+    <button type="button" data-cancel onclick="location.href='{{ url_for('agenda') }}'">LIMPIAR</button>
+  </div>
+</form>
+
+<fieldset class="grow">
+  <legend>TURNOS</legend>
+  <div class="sunken-panel">
+    <table class="grid-table interactive" data-select-input="turno" data-select-button="reservar">
+      <thead><tr><th>HORA</th><th>MEDICO</th><th>CONSULTORIO</th><th>PACIENTE</th><th>ESTADO</th></tr></thead>
+      <tbody>
+        {% for t in turnos %}
+        <tr data-id="{{ t.id }}" class="{{ 'highlighted' if t.id|string == selected }}">
+          <td>{{ t.hora }}</td><td>{{ t.medico }}</td><td>{{ t.consultorio }}</td><td>{{ t.paciente }}</td><td>{{ t.estado }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</fieldset>
+
+<form method="get" action="{{ url_for('reserva') }}" class="row end">
+  <input type="hidden" id="turno" name="turno" value="{{ selected }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <button type="submit" id="reservar" {{ '' if selected else 'disabled' }}>RESERVAR</button>
+</form>
+{% endblock %}

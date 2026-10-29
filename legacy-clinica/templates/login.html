@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block screen %}
+<div class="window login">
+  <div class="title-bar">
+    <div class="title-bar-text">
+      <img src="{{ url_for('static', filename='cross.svg') }}" alt="">
+      ACCESO AL SISTEMA
+    </div>
+  </div>
+  <div class="window-body">
+    <p class="brand">POLICLINICO SANTA ROSA<br>SISTEMA DE CITAS v1.4</p>
+    <form method="post" action="{{ url_for('login') }}" autocomplete="off">
+      <div class="grid login-grid">
+        <label for="operador">OPERADOR:</label>
+        <input type="text" id="operador" name="operador" value="{{ form.operador }}" maxlength="20" autofocus>
+        <label for="clave">CONTRASENA:</label>
+        <input type="password" id="clave" name="clave" maxlength="20">
+      </div>
+      <div class="row end">
+        <button type="submit">INGRESAR</button>
+        <button type="reset" data-cancel>SALIR</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

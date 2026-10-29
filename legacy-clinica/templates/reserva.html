@@ -1,0 +1,45 @@
+{% extends "shell.html" %}
+{% block body %}
+<form method="post" action="{{ url_for('reserva') }}" autocomplete="off">
+  <input type="hidden" name="turno" value="{{ turno.id }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <div class="row">
+    <fieldset class="grow">
+      <legend>TURNO</legend>
+      <div class="grid two">
+        <label>FECHA:</label><input type="text" class="readonly" value="{{ turno.fecha|dmy }}" readonly tabindex="-1">
+        <label>HORA:</label><input type="text" class="readonly" value="{{ turno.hora }}" readonly tabindex="-1">
+        <label>MEDICO:</label><input type="text" class="readonly" value="{{ turno.medico }}" readonly tabindex="-1">
+        <label>CONSULTORIO:</label><input type="text" class="readonly" value="{{ turno.consultorio }}" readonly tabindex="-1">
+        <label>ESPECIALIDAD:</label><input type="text" class="readonly" value="{{ turno.especialidad }}" readonly tabindex="-1">
+        <label>ESTADO:</label><input type="text" class="readonly" value="{{ turno.estado }}" readonly tabindex="-1">
+      </div>
+    </fieldset>
+  </div>
+  <div class="row">
+    <fieldset class="grow">
+      <legend>DATOS DE LA CITA</legend>
+      <div class="grid one">
+        <label for="paciente">PACIENTE:</label>
+        <select id="paciente" name="paciente">
+          <option value="">(SELECCIONE)</option>
+          {% for p in pacientes %}<option value="{{ p.id }}" {{ 'selected' if form.paciente == p.id|string }}>{{ p.nombre }}</option>{% endfor %}
+        </select>
+        <label>TIPO:</label>
+        <div class="radios">
+          {% for t in tipos %}
+          <input type="radio" id="tipo-{{ loop.index }}" name="tipo" value="{{ t }}" {{ 'checked' if form.tipo == t }}>
+          <label for="tipo-{{ loop.index }}">{{ t }}</label>
+          {% endfor %}
+        </div>
+        <label for="motivo">MOTIVO:</label>
+        <input type="text" id="motivo" name="motivo" value="{{ form.motivo }}" maxlength="60">
+      </div>
+    </fieldset>
+    <div class="column">
+      <button type="submit">GRABAR</button>
+      <button type="button" data-cancel onclick="location.href='{{ url_for('agenda') }}?{{ back }}'">CANCELAR</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block screen %}
+<div class="window full">
+  <div class="title-bar">
+    <div class="title-bar-text">
+      <img src="{{ url_for('static', filename='cross.svg') }}" alt="">
+      SISTEMA DE CITAS v1.4 - POLICLINICO SANTA ROSA - [{{ title }}]
+    </div>
+    <div class="title-bar-controls">
+      <button aria-label="Minimize"></button>
+      <button aria-label="Restore"></button>
+      <button aria-label="Close"></button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <a class="key" href="{{ url_for('pacientes') }}" data-key="F2"><b>F2</b> PACIENTES</a>
+    <a class="key" href="{{ url_for('agenda') }}" data-key="F3"><b>F3</b> AGENDA</a>
+    <a class="key" href="{{ url_for('salir') }}" data-key="F10"><b>F10</b> SALIR</a>
+  </div>
+
+  <div class="window-body">
+    <h1 class="banner">{{ title }}</h1>
+    {% block body %}{% endblock %}
+  </div>
+
+  <div class="status-bar">
+    <p class="status-bar-field">OPERADOR: {{ operador }}</p>
+    <p class="status-bar-field">FECHA: {{ today }}</p>
+    <p class="status-bar-field">{{ status }}</p>
+  </div>
+</div>
+{% endblock %}
