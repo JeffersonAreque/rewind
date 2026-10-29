@@ -20,6 +20,14 @@ def test_check_rejection_is_sent_back():
     assert "step 2 is listed twice" in client.calls[1][-1]["content"]
 
 
+def test_an_answer_cut_off_by_the_token_limit_asks_for_less_reasoning():
+    client = FakeClient("", '{"steps": [1]}')
+    answer, _ = ask_json(client, "model", [], Answer, TokenCount())
+    assert answer.steps == [1]
+    assert "cut off by the token limit" in client.calls[1][-1]["content"]
+    assert "not valid" not in client.calls[1][-1]["content"]
+
+
 def test_check_failure_is_raised_after_retries():
     client = FakeClient(*['{"steps": [2, 2]}'] * 3)
     with pytest.raises(ValueError, match="listed twice"):

@@ -25,7 +25,9 @@ from rewind.config import ProviderConfig
 THINK = re.compile(r"^\s*(?:<think>)?(.*?)</think>\s*", re.DOTALL)
 FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
 RETRIES = 2
-MAX_TOKENS = 12000
+MAX_TOKENS = 24000  # reasoning included: a big spec can think for more than 12k tokens before its JSON
+CUT_OFF = ("Your answer was cut off by the token limit before the JSON object. Reason more briefly, "
+           "then answer with only the JSON object.")
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -156,17 +158,17 @@ def ask_json(
         except ValidationError as exc:
             if attempt == RETRIES:
                 raise
-            problem = str(exc)
+            cut_off = getattr(response.choices[0], "finish_reason", None) == "length" and "{" not in answer
+            problem = CUT_OFF if cut_off else str(exc)
         else:
             problem = check(result) if check else None
             if problem is None:
                 return result, reasoning
             if attempt == RETRIES:
                 raise ValueError(problem)
-        messages += [
-            {"role": "assistant", "content": answer},
-            {"role": "user", "content": f"That JSON is not valid:\n{problem}\nAnswer again with only the corrected JSON object."},
-        ]
+        retry = problem if problem == CUT_OFF else (
+            f"That JSON is not valid:\n{problem}\nAnswer again with only the corrected JSON object.")
+        messages += [{"role": "assistant", "content": answer}, {"role": "user", "content": retry}]
     raise AssertionError("unreachable")
 
 
