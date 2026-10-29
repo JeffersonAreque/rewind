@@ -423,7 +423,7 @@ def run(run_dir: Path, provider: str | None = None, run_tests_after: bool = True
     (app_dir / "seed.json").write_text(json.dumps(seed, ensure_ascii=False, indent=1), encoding="utf-8")
 
     # D. Replay tests
-    steps = write_tests(app_dir, flows, app_spec, defaults)
+    steps = write_tests(app_dir, flows, app_spec, defaults, S.recording_date(frames, defaults))
     cover = {s.legacy: S.coverage(s, screen, mod.changes) for s, screen in zip(specs, legacy_screens)}
     (app_dir / "CHANGES.md").write_text(changes_report(app_spec, flows, steps, cover), encoding="utf-8")
     (app_dir / "README.md").write_text(APP_README.format(

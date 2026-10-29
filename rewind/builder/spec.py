@@ -7,6 +7,7 @@ enforces, an unsafe expression...). Their messages go back to the model.
 """
 
 import re
+from collections import Counter
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
@@ -203,6 +204,17 @@ def legacy_defaults(frames: list[dict], screen_name: str) -> dict[str, str]:
             return {f.label: f.value for s in a.sections for f in s.fields
                     if f.editable and f.value and not PLACEHOLDER.match(normalize(f.value))}
     return {}
+
+
+def recording_date(frames: list[dict], defaults: dict[str, dict[str, str]]) -> str | None:
+    """The day the legacy app showed as today (YYYY-MM-DD): a date a new-record form started with,
+    else the most common date in the status bars. None when the recording shows no date."""
+    found = [v for screen in defaults.values() for v in screen.values() if DATE.match(v)]
+    found = found or [x.strip() for f in frames for x in f["analysis"].status_bar if DATE.match(x.strip())]
+    if not found:
+        return None
+    day, month, year = Counter(found).most_common(1)[0][0].split("/")
+    return f"{year}-{month}-{day}"
 
 
 def same_default(default: str | None, legacy: str) -> bool:

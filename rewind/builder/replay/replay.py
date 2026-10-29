@@ -46,6 +46,13 @@ def load_steps() -> list[dict]:
     return json.loads((HERE / "steps.json").read_text(encoding="utf-8"))
 
 
+def recording_today() -> date:
+    """The day of the recording (conftest starts the app on it), or the real date if unknown."""
+    path = HERE / "recording.json"
+    pinned = json.loads(path.read_text(encoding="utf-8")).get("today") if path.exists() else None
+    return date.fromisoformat(pinned) if pinned else date.today()
+
+
 class StepFailed(AssertionError):
     pass
 
@@ -123,7 +130,7 @@ def check(page, c: dict) -> None:
             """e => e.tagName === 'FIELDSET'
                  ? ([...e.querySelectorAll('input:checked')].map(i => i.closest('label').innerText)[0] || '')
                  : e.tagName === 'SELECT' ? (e.selectedOptions[0] ? e.selectedOptions[0].text : '') : e.value""")
-        wanted = date.today().isoformat() if c["value"] == "today" else c["value"]
+        wanted = recording_today().isoformat() if c["value"] == "today" else c["value"]
         normalize = lambda s: " ".join(str(s).upper().split())  # noqa: E731
         if normalize(shown) != normalize(wanted):
             raise StepFailed(f"{c['field']!r} starts with {shown!r}; the legacy screen started with {c['value']!r}")

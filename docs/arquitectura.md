@@ -183,6 +183,7 @@ Resultado en el video de ejemplo:
 - **36 de 36 elementos antiguos** se conservan.
 - **7 cambios de modernización.** Un cambio que deja todo igual que el programa antiguo no cuenta: "FECHA PAGO empieza con la fecha de hoy" se descartó porque la pantalla antigua ya lo hacía.
 - **Valores iniciales:** los campos de un formulario nuevo empiezan como en la grabación (FECHA PAGO = hoy, METODO = EFECTIVO). El checker lo exige y la prueba lo comprueba al abrir la pantalla; si se quita EFECTIVO, la prueba del pago falla.
+- **Fecha de la grabación:** las pruebas arrancan la app con `APP_TODAY` igual al día que el programa antiguo mostraba como hoy (26/10/2026). Ese día sale de las fechas con que empezaban sus formularios o, si no hay, de la barra de estado, y queda en `tests/recording.json`. Así "hoy" muestra lo mismo que el video y las capturas del verificador no cambian de un día a otro. Fuera de las pruebas, la app usa la fecha real.
 - **Prueba de que las pruebas miden algo:** si se quita la fórmula del saldo, la prueba del pago falla en el paso 28 ("no muestra S/ 340.00"); si se quita el campo obligatorio, falla la del cliente.
 - **Costo:** unos 105 mil tokens (10 llamadas); repetir cuesta 0.
 

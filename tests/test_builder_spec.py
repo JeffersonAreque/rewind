@@ -160,6 +160,19 @@ def test_legacy_defaults_skip_placeholders():
     assert legacy_defaults(frames, "PAGO") == {"FECHA PAGO": "26/10/2026", "METODO": "EFECTIVO"}
 
 
+def test_recording_date_comes_from_starting_dates_then_status_bars():
+    from rewind.agents.screens import FrameAnalysis
+    from rewind.builder.spec import recording_date
+
+    def bar(*items):
+        return {"analysis": FrameAnalysis(screen_name="X", window_title="X", status_bar=list(items))}
+
+    frames = [bar("USUARIO: ADMIN", " 27/10/2026 "), bar("27/10/2026"), bar("01/01/1999")]
+    assert recording_date(frames, {"PAGO": {"FECHA PAGO": "26/10/2026", "METODO": "EFECTIVO"}}) == "2026-10-26"
+    assert recording_date(frames, {"PAGO": {"METODO": "EFECTIVO"}}) == "2026-10-27"
+    assert recording_date([bar("LISTO")], {}) is None
+
+
 def test_form_fields_keep_the_legacy_starting_value():
     base = screen()
     base.fields.append(base.fields[0].model_copy(update={"name": "business_name", "legacy": "METODO", "label": "Método"}))

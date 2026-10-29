@@ -101,6 +101,11 @@ def test_payment_in_merged_panel_updates_balance_and_status(client):
     assert page.count('<tr data-id=') == 1 and "PARCIAL" in page and "S/ 340.00" in page
 
 
+def test_today_can_be_pinned_to_the_day_of_the_recording(client, monkeypatch):
+    monkeypatch.setenv("APP_TODAY", "2026-10-26")
+    assert 'value="2026-10-26"' in text(client.get("/p/busqueda-de-facturas?panel=registrar-pago&sel=2"))
+
+
 def test_payment_rules_reject_bad_amounts(client):
     empty = text(client.post("/p/registrar-pago", data={"parent": "2", "f_method": "EFECTIVO"}))
     assert "ERROR 0x0042: CAMPO OBLIGATORIO" in empty and 'data-legacy-screen="REGISTRAR PAGO"' in empty

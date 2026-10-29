@@ -62,6 +62,12 @@ def test_generated_module_is_valid_python(tmp_path):
     assert (tmp_path / "tests" / "replay.py").exists() and (tmp_path / "tests" / "conftest.py").exists()
 
 
+def test_the_replay_runs_on_the_day_of_the_recording(tmp_path):
+    write_tests(tmp_path, FLOWS, SPEC, today="2026-10-26")
+    recording = json.loads((tmp_path / "tests" / "recording.json").read_text(encoding="utf-8"))
+    assert recording == {"today": "2026-10-26"}
+
+
 def test_starting_values_are_checked_when_the_screen_first_opens():
     flows = FLOWS | {"steps": [step(1, "REGISTRAR PAGO", "open_screen", "REGISTRAR PAGO", 0)] + FLOWS["steps"][3:]}
     defaults = {"REGISTRAR PAGO": {"METODO": "EFECTIVO", "FECHA PAGO": "26/10/2026"}}

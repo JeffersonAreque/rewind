@@ -128,13 +128,19 @@ def module_source(flows: dict, steps: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_tests(app_dir: Path, flows: dict, spec: dict, defaults: dict[str, dict[str, str]] | None = None) -> list[dict]:
-    """Write tests/ in the app folder. Returns the replay steps."""
+def write_tests(app_dir: Path, flows: dict, spec: dict, defaults: dict[str, dict[str, str]] | None = None,
+                today: str | None = None) -> list[dict]:
+    """Write tests/ in the app folder. Returns the replay steps.
+
+    `today` (YYYY-MM-DD) is the day of the recording: the replay runs the app on that date, so
+    a "today" field shows what the legacy screen showed and screenshots are the same every day.
+    """
     tests = app_dir / "tests"
     tests.mkdir(parents=True, exist_ok=True)
     for name in ("replay.py", "conftest.py"):
         shutil.copy(TEMPLATE / name, tests / name)
     steps = replay_steps(flows, spec, defaults)
     (tests / "steps.json").write_text(json.dumps(steps, ensure_ascii=False, indent=1), encoding="utf-8")
+    (tests / "recording.json").write_text(json.dumps({"today": today}), encoding="utf-8")
     (tests / "test_workflows.py").write_text(module_source(flows, steps), encoding="utf-8")
     return steps

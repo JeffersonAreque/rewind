@@ -23,9 +23,11 @@ def free_port() -> int:
 
 @pytest.fixture
 def app(tmp_path):
-    """Start the app with the data of the recording and a throwaway password."""
+    """Start the app with the data and the date of the recording and a throwaway password."""
+    from replay import recording_today
+
     port, password = free_port(), secrets.token_urlsafe(9)
-    env = os.environ | {"APP_ADMIN_PASSWORD": password, "PYTHONUTF8": "1"}
+    env = os.environ | {"APP_ADMIN_PASSWORD": password, "PYTHONUTF8": "1", "APP_TODAY": recording_today().isoformat()}
     process = subprocess.Popen(
         [sys.executable, str(APP), "--reset", "--port", str(port), "--db", str(tmp_path / "app.db")],
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,

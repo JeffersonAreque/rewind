@@ -31,6 +31,12 @@ import expr
 HERE = Path(__file__).resolve().parent
 
 
+def today() -> date:
+    """The real date, or the day of the recording when the replay tests pin it (APP_TODAY)."""
+    pinned = os.environ.get("APP_TODAY")
+    return date.fromisoformat(pinned) if pinned else date.today()
+
+
 # ---------- Spec helpers ----------
 
 
@@ -307,7 +313,7 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
         out = {}
         for f in screen["fields"]:
             if f.get("default") == "today":
-                out[f["name"]] = date.today().isoformat()
+                out[f["name"]] = today().isoformat()
             elif f.get("default"):
                 out[f["name"]] = f["default"]
         return out
