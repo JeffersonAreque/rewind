@@ -303,7 +303,7 @@ def run(
         "created": datetime.now().isoformat(timespec="seconds"),
         "provider": config.name,
         "model": config.model,
-        "segmentation": "off",  # SAM 3.1 is optional and not enabled
+        "segmentation": "off",  # SAM 3.1 is optional: REWIND_SEGMENTATION=sam turns it on (see below)
         "keyframes": [
             {
                 "index": f["index"],
@@ -320,5 +320,12 @@ def run(
         "cached_frames": sum(1 for f in analysed if f["cached"]),
         "failed_frames": [f["index"] for f in frames if "error" in f],
     }
+    from rewind import segment
+
+    if segment.enabled():
+        try:
+            report["segmentation"] = json.loads(segment.run(run_dir, log=log).read_text(encoding="utf-8"))["model"]
+        except Exception as exc:  # an optional GPU service (access, network): the run goes on without boxes
+            log(f"SAM skipped, the run goes on without element boxes: {exc}")
     (run_dir / "screens.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     return run_dir

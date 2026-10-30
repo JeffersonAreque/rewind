@@ -136,6 +136,23 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 1 if s["fail"] or r["fail"] else 0
 
 
+def cmd_segment(args: argparse.Namespace) -> int:
+    from rewind import segment
+
+    if not (args.run / "frames.json").is_file():
+        raise ValueError(f"{args.run} has no frames.json; run the screens command first")
+    data = json.loads(segment.run(args.run, args.repo).read_text(encoding="utf-8"))
+    screens_path = args.run / "screens.json"
+    screens = json.loads(screens_path.read_text(encoding="utf-8"))
+    screens["segmentation"] = data["model"]
+    screens_path.write_text(json.dumps(screens, ensure_ascii=False, indent=1), encoding="utf-8")
+    for index, frame in data["frames"].items():
+        if frame["mismatched"]:
+            counts = ", ".join(f"{kind} {read} read / {found} found" for kind, (read, found) in frame["mismatched"].items())
+            print(f"  frame {index}: no boxes for {counts}")
+    return 0
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     from rewind import report
 
@@ -222,6 +239,11 @@ def main() -> int:
     run.add_argument("--min-change", type=int, default=60,
                      help="changed pixels at 320x180 to count as a new keyframe (default 60)")
     run.set_defaults(func=cmd_run)
+
+    seg = commands.add_parser("segment", help="SAM 3.1 on Modal: boxes of the legacy elements (optional, GPU)")
+    seg.add_argument("run", type=Path, help="run folder made by the screens command (runs/<id>)")
+    seg.add_argument("--repo", help="Hugging Face repo of the weights (default SAM_REPO or facebook/sam3.1)")
+    seg.set_defaults(func=cmd_segment)
 
     report = commands.add_parser("report", help="write runs/<id>/report.html from what the agents wrote (no API calls)")
     report.add_argument("run", type=Path, help="run folder (runs/<id>)")
