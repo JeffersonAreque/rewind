@@ -37,6 +37,9 @@
   .pair figcaption { font-size: .85rem; color: var(--muted); margin-bottom: 4px; }
   img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; background: var(--info-bg); aspect-ratio: 16 / 9; }
   .screen { margin-bottom: 16px; }
+  .shot { position: relative; }
+  .shot .outline { position: absolute; border: 3px solid currentColor; border-radius: 3px; background: none;
+                   box-shadow: 0 0 0 2px rgb(255 255 255 / .8); pointer-events: none; }
   .table-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
   table { border-collapse: collapse; width: 100%; font-size: .9rem; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -65,7 +68,7 @@
 {%- endmacro %}
 <header>
   <h1>{{ data.title }}</h1>
-  <p class="muted">Rewind rebuilt this app from <code>{{ data.video }}</code>, a screen recording of the legacy program, with no source code. Run <code>{{ data.run }}</code>{% if data.model %}, model {{ data.model }}{% endif %}.</p>
+  <p class="muted">Rewind rebuilt this app from <code>{{ data.video }}</code>, a screen recording of the legacy program, with no source code. Run <code>{{ data.run }}</code>{% if data.model %}, model {{ data.model }}{% endif %}{% if data.segmentation %}; element outlines by {{ data.segmentation }}{% endif %}.</p>
   <nav aria-label="Sections">
     <a href="#screens">Before / after</a><a href="#workflows">Workflows</a><a href="#rules">Rules</a>
     <a href="#changes">Changes</a><a href="#verification">Verification</a>
@@ -135,7 +138,7 @@
     <div>
       {% if st.verdict == "absorbed" %}<p class="muted">Not needed in the new app: {{ st.absorbed }}.</p>{% else %}
       <div class="pair">
-        <figure><figcaption>Legacy (keyframe {{ st.frame_to }})</figcaption>{% if st.legacy_image %}<img data-img="{{ st.legacy_image }}" alt="Step {{ st.n }} in the recording" loading="lazy">{% endif %}</figure>
+        <figure><figcaption>Legacy (keyframe {{ st.frame_to }}){% if st.outline %} · the outlined element is {{ st.target }}{% endif %}</figcaption>{% if st.legacy_image %}<div class="shot"><img data-img="{{ st.legacy_image }}" alt="Step {{ st.n }} in the recording" loading="lazy">{% if st.outline %}{% set b = st.outline %}<span class="outline {{ st.verdict }}" style="left:{{ '%.2f' % (b[0] * 100) }}%;top:{{ '%.2f' % (b[1] * 100) }}%;width:{{ '%.2f' % ((b[2] - b[0]) * 100) }}%;height:{{ '%.2f' % ((b[3] - b[1]) * 100) }}%" aria-hidden="true"></span>{% endif %}</div>{% endif %}</figure>
         <figure><figcaption>New app</figcaption>{% if st.new_image %}<img data-img="{{ st.new_image }}" alt="Step {{ st.n }} in the new app" loading="lazy">{% else %}<p class="muted">No screenshot.</p>{% endif %}</figure>
       </div>
       {% if st.comparison %}<p class="muted">Data {{ badge(st.comparison.same_data) }} Message {{ badge(st.comparison.same_message) }} Outcome {{ badge(st.comparison.same_outcome) }}</p>{% endif %}

@@ -91,6 +91,19 @@ def test_each_image_is_embedded_once(run_dir):
     assert html.count('data-img="frames/kf_001.png"') == 3  # before/after and two steps
 
 
+def test_sam_boxes_outline_the_element_each_step_acted_on(run_dir):
+    verify(run_dir)
+    assert "outline" not in report.render(report.collect(run_dir), {}).split("<main>")[1]  # no SAM: as before
+    write(run_dir / "segments.json", {"model": "facebook/sam3.1", "frames": {
+        "1": {"boxes": {"GRABAR": [0.5, 0.25, 0.6, 0.3]}, "mismatched": {}}}})
+    data = report.collect(run_dir)
+    assert data["steps"][1]["outline"] == [0.5, 0.25, 0.6, 0.3]  # click GRABAR on keyframe 1
+    assert data["steps"][0]["outline"] is None  # open_screen acts on no element
+    html = report.render(data, {})
+    assert 'class="outline fail" style="left:50.00%;top:25.00%;width:10.00%;height:5.00%"' in html
+    assert "element outlines by facebook/sam3.1" in html
+
+
 def test_embedded_data_cannot_close_the_script(run_dir):
     html = report.render(report.collect(run_dir), {"x": "</script><b>"})
     assert "</script><b>" not in html and "<\\/script>" in html

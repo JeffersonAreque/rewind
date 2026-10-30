@@ -1,8 +1,9 @@
 """One HTML report for a whole run: runs/<id>/report.html.
 
 It only reads what the agents already wrote (screens.json, flows.json,
-app/spec.json, app/build.json, verification.json), so it costs no tokens.
-Missing parts (a run not built or not verified yet) are left out.
+app/spec.json, app/build.json, verification.json, and segments.json when SAM
+3.1 ran), so it costs no tokens. Missing parts (a run not built or not
+verified yet, no SAM boxes) are left out.
 
 The file stands alone: every image is embedded once as base64 and each
 <img data-img="..."> gets it by key, so a keyframe shown three times is
@@ -47,6 +48,7 @@ def collect(run_dir: Path) -> dict:
     spec = read(run_dir / "app" / "spec.json")
     build = read(run_dir / "app" / "build.json")
     verification = read(run_dir / "verification.json")
+    segments = read(run_dir / "segments.json")  # optional SAM 3.1 boxes
 
     checked = {s["n"]: s for s in (verification or {}).get("steps", [])}
     modern = {normalize(s["legacy"]): s["title"] for s in (spec or {}).get("screens", [])}
@@ -56,6 +58,7 @@ def collect(run_dir: Path) -> dict:
         "run": run_dir.name,
         "created": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "model": screens.get("model"),
+        "segmentation": segments["model"] if segments else None,
         "screens": [{
             "name": s["name"], "modern": modern.get(normalize(s["name"])), "legacy_image": s["image"],
             "new_image": new_screen_image(s["name"], list(checked.values())),
@@ -76,8 +79,15 @@ def collect(run_dir: Path) -> dict:
         data["tests"] = build["tests"]
     if verification:
         data["summary"] = verification["summary"]
-        data["steps"] = [s | {"text": describe(s)} for s in verification["steps"]]
+        data["steps"] = [s | {"text": describe(s), "outline": outline(s, segments)} for s in verification["steps"]]
     return data
+
+
+def outline(step: dict, segments: dict | None) -> list[float] | None:
+    """Box (fractions of the image) of the element the step acted on, in its legacy keyframe, if SAM found it."""
+    if not segments or not step.get("legacy_image") or step["action"] not in ("type", "select", "click"):
+        return None
+    return segments["frames"].get(str(step["frame_to"]), {}).get("boxes", {}).get(normalize(step["target"]))
 
 
 def images(data: dict, run_dir: Path) -> dict[str, str]:
