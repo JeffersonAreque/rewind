@@ -29,7 +29,22 @@ video.mp4
 
 **Muse Spark Open** (modelo de pesos abiertos de Meta, usado a través de Baseten) es el núcleo de Rewind y hace todo el trabajo: lee cada pantalla, entiende los flujos, escribe la app y la verifica.
 
-**SAM 3.1** es un complemento opcional. Se activará solo si en el futuro hay acceso a la API de Meta, para afinar la posición exacta de cada elemento. Nada depende de él: hoy no se usa, `screens.json` lo registra como `"segmentation": "off"` y la variable `SAM_API_KEY` de `.env.example` queda vacía.
+**SAM 3.1** es un complemento opcional que marca en el informe el elemento de cada paso verificado. Nada depende de él: si está apagado o falla, todo sigue igual y `screens.json` registra `"segmentation": "off"`.
+
+### SAM 3.1 en Modal (opcional)
+
+```
+REWIND_SEGMENTATION=sam                              # en .env; vacío = apagado
+uv run python -m rewind segment runs/<id>            # agrega las cajas a una corrida que ya existe
+uv run modal run rewind/sam_modal.py::show_check     # arma la imagen y la prueba en CPU, sin pesos
+```
+
+1. **En Modal** (`rewind/sam_modal.py`). Una GPU L4 con torch y el paquete `sam3` de Meta. Los pesos vienen del repositorio con acceso restringido `facebook/sam3.1` (cambiable con `SAM_REPO`), con el token del secreto `huggingface` de Modal, y se guardan en un volumen. SAM busca en cada cuadro clave tres conceptos: "input box", "button" y "table".
+2. **En la máquina** (`rewind/segment.py`). Las cajas se pasan a fracciones de la imagen; se quitan las repetidas y las de poca confianza, y se ordenan como se lee. Cada caja se asigna al elemento que leyó el agente 1, en el mismo orden, **solo si hay tantas cajas como elementos de ese tipo**; si no, ese tipo queda sin cajas y no se adivina nada.
+3. **El resultado** va a `runs/<id>/segments.json`, aparte de `screens.json`: ningún prompt de Muse Spark cambia y ninguna llamada en caché se pierde. Cada respuesta se guarda en caché por la imagen (`runs/cache/sam/`).
+4. **El informe** dibuja sobre el cuadro antiguo de cada paso un recuadro del color de su veredicto alrededor del campo, botón o tabla que usó.
+
+Estado: la imagen de Modal se arma y se probó en CPU con `show_check`. Esa prueba encontró que al paquete `sam3` le faltan dependencias (`einops`, `pycocotools`, `pkg_resources`) y que su modelo usa la CPU si no se le pide `cuda`; las dos cosas ya están resueltas. Falta correrlo en GPU: Modal exige un medio de pago para usar GPU, y el acceso a `facebook/sam3.1` sigue pendiente. Costo previsto: 0 tokens de Muse Spark y unos minutos de L4 por video (menos de 1 dólar).
 
 ## Agente 1: pantallas
 

@@ -18,7 +18,7 @@ Moderniza software antiguo a partir de un video, sin el código fuente. Grabas a
 3. **Agente constructor**: genera una app web con las mismas pantallas y flujos.
 4. **Agente verificador**: repite cada flujo en la app nueva y la compara con el video original.
 
-**Muse Spark Open** (modelo de pesos abiertos de Meta, vía Baseten) es el núcleo y hace todo el trabajo. **SAM 3.1** es un complemento opcional que se activará solo si en el futuro hay acceso a la API de Meta; nada depende de él.
+**Muse Spark Open** (modelo de pesos abiertos de Meta, vía Baseten) es el núcleo y hace todo el trabajo. **SAM 3.1** es un complemento opcional: en una GPU de Modal encuentra cada campo del programa antiguo para marcarlo en el informe. Se activa con `REWIND_SEGMENTATION=sam`; nada depende de él.
 
 Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 

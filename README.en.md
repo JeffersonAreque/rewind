@@ -17,7 +17,7 @@ Modernize legacy software from a screen recording, with no source code. Record s
 3. **Builder agent**: generates a web app with the same screens and workflows.
 4. **Verifier agent**: replays every workflow in the new app and compares it against the original video.
 
-**Muse Spark Open** (Meta's open-weights model, served by Baseten) is the core and does all the work. **SAM 3.1** is an optional add-on that will only be turned on if Meta's API becomes available later; nothing depends on it.
+**Muse Spark Open** (Meta's open-weights model, served by Baseten) is the core and does all the work. **SAM 3.1** is an optional add-on: on a Modal GPU it finds each element of the legacy program so the report can outline it. `REWIND_SEGMENTATION=sam` turns it on; nothing depends on it.
 
 More detail in [docs/arquitectura.md](docs/arquitectura.md) (Spanish).
 
