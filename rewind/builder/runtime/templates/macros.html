@@ -70,7 +70,7 @@
   {% set name, text = field_errors[0] %}
   <dialog class="dialog error" open aria-labelledby="err-text">
     {{ icon('alert', 'icon dialog-icon') }}
-    <p id="err-text" class="error-text">{{ text }}<br>{{ (screen.fields|selectattr('name', 'equalto', name)|first or {'legacy': name}).legacy }}</p>
+    <p id="err-text" class="error-text">{% for line in text.split('\n') %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
     <button type="button" class="btn primary" data-legacy="ACEPTAR" data-close data-focus="f_{{ name }}" autofocus>Aceptar</button>
   </dialog>
   {% endif %}

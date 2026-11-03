@@ -279,8 +279,16 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
                     failed = own is not None and own > expr.evaluate(v["other"], scope)
             if failed and v["field"] not in errors:
                 # The legacy text as shown; older specs keep the code apart and get the 0x format.
-                errors[v["field"]] = v["message"] if v["code"] in v["message"] else f"ERROR {v['code']}: {v['message']}"
+                errors[v["field"]] = (v["message"] if v["code"] in v["message"]
+                                      else in_dialog(screen, v["field"], f"ERROR {v['code']}: {v['message']}"))
         return errors
+
+    def in_dialog(screen: dict, name: str, text: str) -> str:
+        """A short error in a dialog names its field below, as the legacy dialogs did."""
+        if screen.get("error_style") == "inline":
+            return text
+        legacy = next((f["legacy"] for f in screen["fields"] if f["name"] == name), name)
+        return f"{text}\n{legacy}"
 
     def read_form(screen: dict, entity: str) -> tuple[dict, dict, dict]:
         """(raw text, parsed values, type errors) for the screen's form fields."""
@@ -290,7 +298,7 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
             value, error = parse_value(spec, entity, spec.field(entity, f["name"]), raw[f["name"]], db())
             values[f["name"]] = value
             if error and raw[f["name"]]:
-                errors[f["name"]] = error
+                errors[f["name"]] = in_dialog(screen, f["name"], error)
         return raw, values, errors
 
     def insert(entity: str, values: dict) -> int:

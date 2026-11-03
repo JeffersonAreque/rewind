@@ -68,7 +68,18 @@ def test_required_field_as_dialog_when_not_modernized(tmp_path, monkeypatch):
     c = make_client(tmp_path, monkeypatch, spec)
     c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
     page = text(c.post("/p/registro-de-clientes", data={}))
-    assert "<dialog" in page and 'data-legacy="ACEPTAR"' in page and "0x0042" in page
+    assert "<dialog" in page and 'data-legacy="ACEPTAR"' in page
+    assert "ERROR 0x0042: CAMPO OBLIGATORIO<br>RUC / DNI</p>" in page  # the short message names its field
+
+
+def test_full_legacy_message_in_dialog_is_shown_as_is(tmp_path, monkeypatch):
+    spec = copy.deepcopy(FIXTURE["spec"])
+    spec["screens"][1]["error_style"] = "dialog"
+    spec["screens"][1]["validations"][0]["message"] = "ERROR 0x0042: DOCUMENTO NO VALIDO"
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    page = text(c.post("/p/registro-de-clientes", data={}))
+    assert 'class="error-text">ERROR 0x0042: DOCUMENTO NO VALIDO</p>' in page
 
 
 def test_create_customer(client):
