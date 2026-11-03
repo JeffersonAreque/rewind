@@ -119,7 +119,8 @@ changes, each one of these kinds:
 - default_value, reorder_fields, remove_element (a field, button or menu entry no step uses,
   for example a menu that repeats other entries).
 Each change gives how it was (legacy), how it will be (modernized), the reason and the numbers of
-the steps that justify it. Also give the side navigation: one item per legacy menu entry kept
+the steps that justify it; write legacy, modernized and reason in English (they go in an English
+report), quoting labels and messages exactly as the app shows them. Also give the side navigation: one item per legacy menu entry kept
 (modern label, legacy label, legacy screen it opens); every legacy menu entry is kept or removed
 with remove_element. Give the app a short modern title in Spanish.
 """ + schema_text(S.Modernization)

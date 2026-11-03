@@ -72,9 +72,9 @@ class Change(BaseModel):
     ]
     screens: list[str] = Field(description="legacy screen names involved; merge_screens: [search screen, screen it opens]")
     element: str | None = Field(None, description="legacy label of the field, button, column or menu, if any")
-    legacy: str = Field(description="how it was")
-    modernized: str = Field(description="how it will be")
-    reason: str
+    legacy: str = Field(description="how it was, in English")
+    modernized: str = Field(description="how it will be, in English")
+    reason: str = Field(description="why, in English")
     evidence_steps: list[int] = Field(description="numbers of the steps in the recording that justify it")
 
 
