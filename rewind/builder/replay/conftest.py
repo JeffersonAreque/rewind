@@ -28,10 +28,13 @@ def app(tmp_path):
 
     port, password = free_port(), secrets.token_urlsafe(9)
     env = os.environ | {"APP_ADMIN_PASSWORD": password, "PYTHONUTF8": "1", "APP_TODAY": recording_today().isoformat()}
-    process = subprocess.Popen(
-        [sys.executable, str(APP), "--reset", "--port", str(port), "--db", str(tmp_path / "app.db")],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-    )
+    # The server logs every request: to a file, since an unread pipe fills up and blocks it mid-workflow.
+    log = tmp_path / "server.log"
+    with log.open("wb") as stderr:  # the server keeps its own handle
+        process = subprocess.Popen(
+            [sys.executable, str(APP), "--reset", "--port", str(port), "--db", str(tmp_path / "app.db")],
+            env=env, stdout=subprocess.DEVNULL, stderr=stderr,
+        )
     url = f"http://127.0.0.1:{port}"
     for _ in range(100):
         try:
@@ -39,7 +42,7 @@ def app(tmp_path):
             break
         except OSError:
             if process.poll() is not None:
-                raise RuntimeError(process.stderr.read().decode(errors="replace"))
+                raise RuntimeError(log.read_text(encoding="utf-8", errors="replace"))
             time.sleep(0.1)
     try:
         yield {"url": url, "password": password}
