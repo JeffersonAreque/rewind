@@ -1,5 +1,5 @@
 {# A transaction (e.g. a payment) on a parent record (e.g. an invoice). `t` holds its context. #}
-{% from "macros.html" import field_input, error_box with context %}
+{% from "macros.html" import field_input, error_box, badge, icon with context %}
 {% set s = t.screen %}
 
 {% if s.parent_lookup and not s.embedded_in %}
@@ -11,7 +11,7 @@
   </div>
   {% endfor %}
   {% for a in s.actions if a.action == 'lookup' %}
-  <button type="submit" class="btn" data-legacy="{{ a.legacy }}">{{ a.label }}</button>
+  <button type="submit" class="btn" data-legacy="{{ a.legacy }}">{{ icon('search') }}<span>{{ a.label }}</span></button>
   {% endfor %}
 </form>
 {% endif %}
@@ -23,7 +23,7 @@
     <dd data-legacy="{{ f.legacy }}">
       {% set field = spec.field(s.parent, f.name) %}
       {% set text = show(field, t.parent[f.name], t.parent) %}
-      {% if field.type == 'enum' %}<span class="badge tone-{{ field.enum_values.index(text) if text in field.enum_values else 0 }}">{{ text }}</span>{% else %}{{ text }}{% endif %}
+      {% if field.type == 'enum' %}{{ badge(text) }}{% else %}{{ text }}{% endif %}
     </dd></div>
   {% endfor %}
 </dl>
@@ -45,5 +45,5 @@
   </div>
 </form>
 {% elif t.lookup %}
-<p class="alert" role="alert">No se encontró «{{ t.lookup }}».</p>
+<p class="alert" role="alert">{{ icon('alert') }}<span>No se encontró «{{ t.lookup }}».</span></p>
 {% endif %}

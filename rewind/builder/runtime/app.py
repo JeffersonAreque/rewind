@@ -45,6 +45,36 @@ def norm(text) -> str:
     return " ".join("".join(c for c in text if not unicodedata.combining(c)).upper().split())
 
 
+# Badge colour of a status by the start of its words; anything else is neutral.
+TONES = {
+    "success": ("PAGAD", "LIBRE", "DISPONIBLE", "ACTIV", "APROBAD", "COMPLETAD", "ATENDID", "CONFIRMAD", "ENTREGAD"),
+    "warning": ("PENDIENTE", "EN PROCESO", "POR ", "BORRADOR", "ESPERA"),
+    "info": ("PARCIAL", "RESERVAD", "PROGRAMAD", "ASIGNAD", "ENVIAD"),
+    "danger": ("ANULAD", "CANCELAD", "VENCID", "RECHAZAD", "INACTIV", "BLOQUEAD", "OCUPAD"),
+}
+
+
+def tone(text) -> str:
+    words = norm(text)
+    return next((t for t, starts in TONES.items() if any(words.startswith(s) for s in starts)), "neutral")
+
+
+# Sidebar icon of a menu entry by the words of its labels; anything else gets a grid.
+NAV_ICONS = {
+    "users": ("CLIENTE", "PACIENTE", "USUARIO", "PERSONA", "PROVEEDOR", "EMPLEADO", "SOCIO"),
+    "invoice": ("FACTURA", "COMPROBANTE", "BOLETA", "DOCUMENTO", "VENTA"),
+    "card": ("PAGO", "COBR", "CAJA"),
+    "calendar": ("AGENDA", "CITA", "RESERV", "TURNO", "CALENDARIO", "HORARIO"),
+    "box": ("PRODUCTO", "INVENTARIO", "ALMACEN", "STOCK", "ARTICULO"),
+    "chart": ("REPORTE", "ESTADISTICA", "RESUMEN"),
+}
+
+
+def nav_icon(item: dict) -> str:
+    words = norm(f"{item['label']} {item['legacy']}").split()
+    return next((name for name, keys in NAV_ICONS.items() if any(w.startswith(keys) for w in words)), "grid")
+
+
 class Spec:
     def __init__(self, data: dict):
         self.data = data
@@ -198,7 +228,8 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
 
     @app.context_processor
     def helpers():
-        return {"spec": spec, "show": lambda f, v, row=None: show_value(spec, f, v, row, db()), "norm": norm}
+        return {"spec": spec, "show": lambda f, v, row=None: show_value(spec, f, v, row, db()), "norm": norm, "tone": tone,
+                "nav_icon": nav_icon}
 
     def login_screen() -> dict:
         return next(s for s in spec.screens.values() if s["kind"] == "login")

@@ -197,7 +197,22 @@ def test_payment_rules_reject_bad_amounts(client):
 
 def test_full_payment_marks_invoice_paid(client):
     client.post("/p/registrar-pago", data={"parent": "2", "f_amount": "640", "f_method": "EFECTIVO"})
-    assert "PAGADA" in text(client.get("/p/busqueda-de-facturas?number=F001-000110"))
+    assert '<span class="badge tone-success">PAGADA</span>' in text(client.get("/p/busqueda-de-facturas?number=F001-000110"))
+
+
+@pytest.mark.parametrize("status, tone", [
+    ("PENDIENTE", "warning"), ("PARCIAL", "info"), ("PAGADA", "success"), ("LIBRE", "success"),
+    ("RESERVADA", "info"), ("Anulado", "danger"), ("INACTIVO", "danger"), ("TRANSFERENCIA", "neutral"),
+])
+def test_status_tone_follows_its_meaning(status, tone):
+    assert runtime.tone(status) == tone
+
+
+def test_sidebar_icon_follows_the_menu_words(client):
+    assert runtime.nav_icon({"label": "Agenda", "legacy": "F3 AGENDA"}) == "calendar"
+    assert runtime.nav_icon({"label": "Solicitar", "legacy": "SOLICITAR"}) == "grid"
+    page = text(client.get("/p/registro-de-clientes"))
+    assert 'aria-current="page"' in page and '<svg class="icon"' in page
 
 
 def test_embedded_screen_redirects_to_its_page(client):

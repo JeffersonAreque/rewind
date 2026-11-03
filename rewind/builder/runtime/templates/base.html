@@ -1,10 +1,12 @@
 <!doctype html>
+{% from "macros.html" import icon with context %}
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ spec.data.title }}{% endblock %}</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232453d4'/%3E%3Cpath d='M4 4h8M4 8h8M4 12h5' stroke='white' stroke-width='1.6'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%234f46e5'/%3E%3Cpath d='M4 4.5h8M4 8h8M4 11.5h5' stroke='white' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preload" href="{{ url_for('static', filename='fonts/inter-latin-var.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
@@ -14,9 +16,10 @@
 {# Messages after a redirect: a dialog that needs a click, or a toast that leaves on its own. #}
 {% for m in messages %}
   {% if m.style == 'toast' %}
-  <div class="toast" role="status" data-message>{{ m.text }}</div>
+  <div class="toast" role="status" data-message>{{ icon('check') }}<span>{{ m.text }}</span></div>
   {% else %}
   <dialog class="dialog" open aria-labelledby="dlg-text" data-message>
+    {{ icon('info', 'icon dialog-icon') }}
     <p id="dlg-text">{{ m.text }}</p>
     <button type="button" class="btn primary" data-legacy="ACEPTAR" data-close autofocus>Aceptar</button>
   </dialog>
