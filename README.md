@@ -30,8 +30,8 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 | Configuración de proveedor (Baseten / Fireworks) | Lista |
 | Agente 1: pantallas | Listo: 100 % de acierto en facturación (110/110) y 99 % en la clínica (99/100) |
 | Agente 2: flujos | Listo: 100 % en los dos videos (facturación: 29/29 pasos, 11/11 valores, 4/4 flujos, 7/7 reglas; clínica: 41/41, 12/12, 4/4, 6/6) |
-| Agente 3: constructor | Listo: 4/4 flujos repetidos con éxito en cada app (9 cambios justificados en facturación, 7 en la clínica) |
-| Agente 4: verificador | Listo: facturación 25/26 pasos y 10/10 reglas; clínica 35/38 pasos y 10/12 reglas; 0 fallas, el resto dudosos. Detecta 3 de 3 copias rotas en cada app |
+| Agente 3: constructor | Listo: 4/4 flujos repetidos con éxito en cada app (7 cambios justificados en facturación y 7 en la clínica, con su motivo en inglés) |
+| Agente 4: verificador | Listo: facturación 25/26 pasos y 10/10 reglas; clínica 36/38 pasos y 9/12 reglas; 0 fallas, el resto dudosos. Detecta 3 de 3 copias rotas en cada app (medido con el diseño anterior de la app) |
 | Segunda app: citas de una clínica, grabada rápido | Lista: otra estética, otro formato de errores y una regla nueva; sus resultados están en las filas de arriba |
 
 ## Tecnologías

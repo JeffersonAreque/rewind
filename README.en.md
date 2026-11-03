@@ -29,8 +29,8 @@ More detail in [docs/arquitectura.md](docs/arquitectura.md) (Spanish).
 | Provider config (Baseten / Fireworks) | Done |
 | Agent 1: screens | Done: 100% accuracy on billing (110/110) and 99% on the clinic (99/100) |
 | Agent 2: flows | Done: 100% on both videos (billing: 29/29 steps, 11/11 values, 4/4 workflows, 7/7 rules; clinic: 41/41, 12/12, 4/4, 6/6) |
-| Agent 3: builder | Done: 4/4 workflows replayed successfully in each app (9 justified changes in billing, 7 in the clinic) |
-| Agent 4: verifier | Done: billing 25/26 steps and 10/10 rules; clinic 35/38 steps and 10/12 rules; 0 fails, the rest unclear. Catches 3 of 3 broken copies in each app |
+| Agent 3: builder | Done: 4/4 workflows replayed successfully in each app (7 justified changes in billing and 7 in the clinic, each with its reason in English) |
+| Agent 4: verifier | Done: billing 25/26 steps and 10/10 rules; clinic 36/38 steps and 9/12 rules; 0 fails, the rest unclear. Catches 3 of 3 broken copies in each app (measured with the app's previous design) |
 | Second app: clinic appointments, recorded fast | Done: another look, another error format and a new rule; its results are in the rows above |
 
 ## Stack

@@ -163,14 +163,14 @@ uv run python runs/<id>/app/app.py        # http://127.0.0.1:5001
 ```
 
 **El modelo nunca escribe código.** La app se arma con dos piezas:
-- un **runtime** fijo que escribimos y probamos una vez (`rewind/builder/runtime/`: Flask + SQLite, interfaz moderna);
+- un **runtime** fijo que escribimos y probamos una vez (`rewind/builder/runtime/`: Flask + SQLite, interfaz moderna: cabecera con el nombre de la app, menú lateral con íconos, tarjetas, tablas en una línea con «…» y el valor completo al pasar el mouse, estados con color según su significado, y la fuente Inter incluida, sin CDN);
 - un **spec** en JSON que llena Muse Spark Open y que validan pydantic y los chequeos de `rewind/builder/spec.py`.
 
 Si un chequeo falla, el error vuelve al modelo y la llamada se reintenta. Una respuesta guardada en caché se vuelve a revisar con los chequeos actuales.
 
 1. **Datos iniciales.** Muse Spark copia las filas de cada tabla del primer cuadro donde aparece con datos: los 6 clientes y las 3 facturas de TAMBOPATA. Ese es el estado antes de que el usuario cambie algo. El número de filas debe coincidir con el que vio el agente 1, y no se inventan registros que no salen en el video.
 2. **Modelo de datos.** Define las entidades (cliente, factura, pago) con campos tipados. Un código `serial` (como C0006) solo vale si los códigos vistos son 1, 2, 3… seguidos; los números de factura (F001-000110) quedan como texto.
-3. **Modernización.** El modelo propone cambios de una lista fija, cada uno con su motivo y los pasos del video que lo justifican:
+3. **Modernización.** El modelo propone cambios de una lista fija, cada uno con su motivo (en inglés, porque va al informe) y los pasos del video que lo justifican:
    - unir la búsqueda y el pago en una sola página;
    - errores junto al campo en vez de un diálogo;
    - un aviso que se cierra solo en vez de un ACEPTAR;
@@ -195,12 +195,12 @@ Si un chequeo falla, el error vuelve al modelo y la llamada se reintenta. Una re
 
 Resultado en el video de ejemplo:
 - **4/4 flujos pasan**, con 29 pasos, 3 de ellos absorbidos por los cambios.
-- **34 de 36 elementos antiguos** se conservan; los otros 2 (los botones LIMPIAR) se quitaron a propósito porque ningún paso los usa.
-- **9 cambios de modernización.** Un cambio que deja todo igual que el programa antiguo no cuenta: "FECHA PAGO empieza con la fecha de hoy" se descartó porque la pantalla antigua ya lo hacía.
+- **36 de 36 elementos antiguos** se conservan. En una corrida anterior el modelo quitó los 2 botones LIMPIAR porque ningún paso los usa; en la última los dejó.
+- **7 cambios de modernización** (fueron 9 en la corrida anterior: el modelo no propone siempre la misma lista). Un cambio que deja todo igual que el programa antiguo no cuenta: "FECHA PAGO empieza con la fecha de hoy" se descartó porque la pantalla antigua ya lo hacía.
 - **Valores iniciales:** los campos de un formulario nuevo empiezan como en la grabación (FECHA PAGO = hoy, METODO = EFECTIVO). El checker lo exige y la prueba lo comprueba al abrir la pantalla; si se quita EFECTIVO, la prueba del pago falla.
 - **Fecha de la grabación:** las pruebas arrancan la app con `APP_TODAY` igual al día que el programa antiguo mostraba como hoy (26/10/2026). Ese día sale de las fechas con que empezaban sus formularios o, si no hay, de la barra de estado, y queda en `tests/recording.json`. Así "hoy" muestra lo mismo que el video y las capturas del verificador no cambian de un día a otro. Fuera de las pruebas, la app usa la fecha real.
 - **Prueba de que las pruebas miden algo:** si se quita la fórmula del saldo, la prueba del pago falla en el paso 28 ("no muestra S/ 340.00"); si se quita el campo obligatorio, falla la del cliente.
-- **Costo:** unos 115 mil tokens (8 llamadas); repetir cuesta 0.
+- **Costo:** unos 100 mil tokens (7 a 9 llamadas); repetir cuesta 0.
 
 ## Agente 4: verificador
 
@@ -241,6 +241,8 @@ Verifica la app sana y 3 copias rotas en `runs/<id>/eval/`. La app sana no debe 
 | Sin EFECTIVO | 22 en la prueba (METODO empieza vacío) | abrir REGISTRAR PAGO y las del pago |
 
 Las copias solo pagan las capturas que cambian: unos 35 mil tokens en total. Repetir cuesta 0.
+
+**Pendiente tras el rediseño (noviembre de 2026):** esta prueba no se volvió a correr después de cambiar el diseño de la app nueva. La tabla de arriba y la de la clínica son de la versión anterior, y sus copias siguen en `runs/<id>/eval/` con ese diseño. Volver a correrla costaría unos 260 mil tokens, porque cambian todas las capturas.
 
 ## Todo de una vez: `rewind run` e informe HTML
 
@@ -290,15 +292,17 @@ uv run python scripts/eval_verifier.py runs/<id>
 - **Página unida:** al cancelar o al fallar una reserva en el panel, la agenda vuelve con la misma búsqueda, como en el programa antiguo.
 - **Repetición:** cada paso busca solo el tipo de elemento que usa (un campo, una lista o un botón), porque en la página unida PACIENTE es a la vez columna y campo. Una fila leída con poca confianza se prueba también con sus otras lecturas.
 - **Verificación:** el largo de la clave enmascarada no cuenta, porque la prueba usa su propia clave.
+- **Mensajes completos en un diálogo:** el diálogo de error agregaba siempre el nombre del campo en una segunda línea, como hacía la facturación ("CAMPO OBLIGATORIO" y debajo "RUC / DNI"). El `E-305` de la clínica ya trae el texto completo y quedaba con un "PACIENTE" de más, que el verificador marcó como falla al rediseñar la app. Ahora el nombre del campo solo se agrega a los mensajes cortos.
 
 **Resultado:**
 - **Pantallas:** 99 % de acierto (99/100; una fecha de solo lectura se leyó como texto) y 100 % de precisión.
 - **Flujos:** 41/41 pasos, 12/12 valores, 4/4 flujos y 6/6 reglas. La agrupación en flujos cambió entre corridas: una vez juntó la búsqueda con el intento fallido (2/4).
 - **Constructor:** 4/4 flujos repetidos con éxito y 35 de 35 elementos antiguos conservados.
-- **Verificador:** 35 pasos pasan, 0 fallan y 3 quedan dudosos, porque el aviso CITA RESERVADA tapa el nombre del paciente en el video. 10 de 12 reglas pasan y 2 quedan dudosas.
-- **Copias rotas:** detecta las 3. Sin APELLIDOS obligatorio falla el paso del `E-101`; sin el control del turno tomado falla el del `E-305`. Si la reserva no marca el turno como RESERVADA, la prueba no lo nota (la página sigue diciendo RESERVADA en otras filas): lo detecta solo Muse Spark al comparar las capturas (09:30 sigue LIBRE).
+- **Verificador:** 36 pasos pasan, 0 fallan y 2 quedan dudosos: en uno el cuadro clave se tomó después de pasos posteriores, y en el otro el aviso CITA RESERVADA tapa el nombre del paciente en el video. 9 de 12 reglas pasan y 3 quedan dudosas por esos dos pasos.
+- **Copias rotas** (con el diseño anterior de la app): detecta las 3. Sin APELLIDOS obligatorio falla el paso del `E-101`; sin el control del turno tomado falla el del `E-305`. Si la reserva no marca el turno como RESERVADA, la prueba no lo nota (la página sigue diciendo RESERVADA en otras filas): lo detecta solo Muse Spark al comparar las capturas (09:30 sigue LIBRE).
 - **Facturación:** se volvió a correr entera (`rewind run`) con el código nuevo y 0,2 s; sus resultados de arriba son los de esa corrida.
 - **Costo:** unos 1,2 millones de tokens en total, incluidas cuatro reconstrucciones mientras se arreglaba lo anterior. Repetir cuesta 0.
+- **Rediseño de la app (noviembre de 2026):** reconstruir y volver a verificar las dos apps costó 689 mil tokens: 254 mil del constructor (16 llamadas) y 435 mil del verificador (67 comparaciones). Las corridas anteriores quedaron copiadas en `runs/backup-before-restyle/`.
 
 ## Proveedor de modelos
 
