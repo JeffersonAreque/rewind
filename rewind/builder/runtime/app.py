@@ -19,7 +19,7 @@ import sqlite3
 import unicodedata
 from contextlib import closing
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from functools import wraps
 from pathlib import Path
 
@@ -94,6 +94,14 @@ class Spec:
 
 # ---------- Values: display text <-> storage ----------
 
+MAX_AMOUNT = Decimal(10) ** 12  # far above any real amount, far below SQLite's integer limit in cents
+
+
+class FieldError(str):
+    """An error the new app adds on its own (the recording never showed one, so there is no legacy
+    text to copy). It is always shown under its field, whatever the screen's error style."""
+    inline = True
+
 
 def parse_value(spec: Spec, entity: str, field: dict, text, db=None):
     """Turn what a user typed (or the legacy screen showed) into the stored value.
@@ -103,11 +111,12 @@ def parse_value(spec: Spec, entity: str, field: dict, text, db=None):
         return None, None
     kind = field["type"]
     if kind == "money":
-        try:
-            amount = Decimal(re.sub(r"[^\d.\-]", "", text))
-        except InvalidOperation:
+        # A currency sign in front ("S/", "S/.", "$") and thousands commas are fine; anything else is not.
+        number = re.sub(r"^(?:[^\d\s.\-]+\.?)?\s*", "", text).replace(",", "")
+        if not re.fullmatch(r"-?(\d+(\.\d{0,2})?|\.\d{1,2})", number):
             return None, "Monto inválido"
-        if amount != amount.quantize(Decimal("0.01")):
+        amount = Decimal(number)
+        if abs(amount) >= MAX_AMOUNT:
             return None, "Monto inválido"
         return int(amount * 100), None
     if kind == "date":
@@ -123,9 +132,10 @@ def parse_value(spec: Spec, entity: str, field: dict, text, db=None):
         match = next((v for v in field["enum_values"] if norm(v) == norm(text)), None)
         return (match, None) if match else (None, "Valor inválido")
     if kind == "ref":
-        if text.isdigit():
-            return int(text), None
         target = spec.entities[field["ref"]]
+        if text.isdigit():
+            found = db.execute(f"SELECT id FROM {target['name']} WHERE id = ?", (int(text),)).fetchone()
+            return (found["id"], None) if found else (None, "Registro no encontrado")
         for row in db.execute(f"SELECT id, {target['display']} AS d FROM {target['name']}"):
             if norm(row["d"]) == norm(text):
                 return row["id"], None
@@ -264,9 +274,13 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
     def validate(screen: dict, raw: dict, scope: dict) -> dict:
         """Run the screen's validations. Returns {field name: legacy-style error text}."""
         errors = {}
+        form = scope.get(screen.get("entity"), {})
         for v in screen.get("validations", []):
             value = raw.get(v["field"])
             failed = False
+            if v.get("other") and any(n.partition(".")[0] == screen.get("entity") and form.get(n.partition(".")[2]) is None
+                                      for n in expr.names(v["other"])):
+                continue  # it reads a form value that is blank or unreadable: that field has its own error
             if v["check"] == "required":
                 failed = value in (None, "")
             elif v["check"] == "condition":  # e.g. the slot must still be free
@@ -290,15 +304,33 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
         legacy = next((f["legacy"] for f in screen["fields"] if f["name"] == name), name)
         return f"{text}\n{legacy}"
 
+    def needed(screen: dict) -> set[str]:
+        """Form fields a save cannot do without, even when the recording never showed them refused:
+        the ones its rules and number formulas read, and the records a transaction links."""
+        entity = screen["entity"]
+        texts = [v["other"] for v in screen.get("validations", []) if v.get("other")]
+        for effect in screen.get("effects", []):
+            texts += ([effect["expr"]] if effect.get("expr") else []) + [c["when"] for c in effect.get("cases", [])]
+        # Text formulas join blanks fine; a number formula would break on one.
+        texts += [f["formula"] for f in spec.stored(entity) if f.get("formula") and f["type"] != "text"]
+        read = set().union(*(expr.names(t) for t in texts))
+        return {f["name"] for f in screen["fields"] if f"{entity}.{f['name']}" in read or (
+            screen["kind"] == "transaction" and spec.field(entity, f["name"])["type"] == "ref")}
+
     def read_form(screen: dict, entity: str) -> tuple[dict, dict, dict]:
-        """(raw text, parsed values, type errors) for the screen's form fields."""
+        """(raw text, parsed values, the app's own errors) for the screen's form fields."""
         raw = {f["name"]: request.form.get(f"f_{f['name']}", "") for f in screen["fields"]}
-        values, errors = {}, {}
+        values, errors, required = {}, {}, needed(screen)
         for f in screen["fields"]:
-            value, error = parse_value(spec, entity, spec.field(entity, f["name"]), raw[f["name"]], db())
+            field = spec.field(entity, f["name"])
+            value, error = parse_value(spec, entity, field, raw[f["name"]], db())
             values[f["name"]] = value
-            if error and raw[f["name"]]:
-                errors[f["name"]] = in_dialog(screen, f["name"], error)
+            if error:
+                errors[f["name"]] = FieldError(error)
+            elif value is None and f["name"] in required:
+                errors[f["name"]] = FieldError("Campo obligatorio")
+            elif field["type"] == "money" and value is not None and value <= 0:  # parsed, so a legacy "positive" rule still sees it
+                errors[f["name"]] = FieldError("El monto debe ser mayor que 0")
         return raw, values, errors
 
     def insert(entity: str, values: dict) -> int:
@@ -448,7 +480,7 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
     def save_create(screen: dict):
         entity = screen["entity"]
         raw, values, errors = read_form(screen, entity)
-        errors = validate(screen, raw, {entity: values}) | errors
+        errors = errors | validate(screen, raw, {entity: values})  # a legacy message wins over the app's own
         if errors:
             return render_page(screen["id"], values=raw, errors=errors)
         insert(entity, values)
@@ -463,7 +495,7 @@ def create_app(spec_data: dict, db_path: Path) -> Flask:
         entity = screen["entity"]
         raw, values, errors = read_form(screen, entity)
         scope = {screen["parent"]: dict(parent), entity: values}
-        errors = validate(screen, raw, scope) | errors
+        errors = errors | validate(screen, raw, scope)  # a legacy message wins over the app's own
         if errors:
             context = transaction_context(screen, parent_id=parent_id) | {"values": raw, "errors": errors}
             if screen.get("embedded_in"):

@@ -206,6 +206,80 @@ def test_payment_rules_reject_bad_amounts(client):
     assert "ERROR 0x00A4: MONTO EXCEDE SALDO PENDIENTE" in too_much
 
 
+def unchecked_payment_client(tmp_path, monkeypatch):
+    """The payment screen as a recording that never showed a refused payment: no validations at all,
+    and legacy errors in a dialog (as the rebuilt billing app has it)."""
+    spec = copy.deepcopy(FIXTURE["spec"])
+    spec["screens"][3] |= {"validations": [], "error_style": "dialog"}
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    return c
+
+
+def test_an_empty_amount_is_refused_under_its_field_not_a_server_error(tmp_path, monkeypatch):
+    c = unchecked_payment_client(tmp_path, monkeypatch)
+    for amount in ("", "   "):
+        response = c.post("/p/registrar-pago", data={"parent": "2", "f_amount": amount, "f_method": "EFECTIVO"})
+        page = text(response)
+        assert response.status_code == 200 and "Campo obligatorio" in page
+        assert 'aria-describedby="f_amount-error"' in page and "<dialog" not in page  # inline, not the legacy dialog
+    with closing(runtime.connect(tmp_path / "app.db")) as db:
+        assert db.execute("SELECT count(*) FROM payment").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("amount, message", [
+    ("abc", "Monto inválido"), ("12abc", "Monto inválido"), ("1.2.3", "Monto inválido"), ("1e5", "Monto inválido"),
+    ("10.001", "Monto inválido"), ("9" * 40, "Monto inválido"), ("0", "El monto debe ser mayor que 0"),
+    ("-300", "El monto debe ser mayor que 0"),
+])
+def test_an_invalid_amount_is_refused_under_its_field(tmp_path, monkeypatch, amount, message):
+    c = unchecked_payment_client(tmp_path, monkeypatch)
+    response = c.post("/p/registrar-pago", data={"parent": "2", "f_amount": amount, "f_method": "EFECTIVO"})
+    page = text(response)
+    assert response.status_code == 200 and message in page and 'aria-invalid="true"' in page
+    assert f'value="{amount}"' in page  # what the user typed stays in the field
+    assert "S/ 640.00" in text(c.get("/p/busqueda-de-facturas?number=F001-000110"))  # balance untouched
+
+
+@pytest.mark.parametrize("typed, cents", [
+    ("300", 30000), ("300.5", 30050), ("S/ 1,250.00", 125000), ("S/.40", 4000), ("-3", -300), (".5", 50),
+])
+def test_amounts_may_carry_the_currency_and_thousands(typed, cents):
+    assert runtime.parse_value(None, "payment", {"type": "money"}, typed) == (cents, None)
+
+
+def test_the_legacy_message_wins_over_the_apps_own(client):
+    page = text(client.post("/p/registrar-pago", data={"parent": "2", "f_amount": "", "f_method": "EFECTIVO"}))
+    assert "ERROR 0x0042: CAMPO OBLIGATORIO" in page and "Campo obligatorio" not in page
+
+
+def test_a_legacy_rule_over_a_blank_amount_does_not_break(tmp_path, monkeypatch):
+    spec = copy.deepcopy(FIXTURE["spec"])
+    spec["screens"][3]["validations"] = [v for v in spec["screens"][3]["validations"] if v["check"] != "required"]
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    page = text(c.post("/p/registrar-pago", data={"parent": "2", "f_amount": "", "f_method": "EFECTIVO"}))
+    assert "Campo obligatorio" in page  # "not above the balance" needs the amount, so it is required
+
+
+def test_a_transaction_needs_the_record_it_links(tmp_path, monkeypatch):
+    spec = copy.deepcopy(FIXTURE["spec"])
+    payment = next(e for e in spec["entities"] if e["name"] == "payment")
+    payment["fields"].append({"name": "customer", "type": "ref", "ref": "customer", "label": "Cliente"})
+    spec["screens"][3]["fields"].append({"name": "customer", "label": "Cliente", "legacy": "CLIENTE", "input": "select"})
+    c = make_client(tmp_path, monkeypatch, spec)
+    c.post("/login", data={"username": "ADMIN", "password": PASSWORD})
+    payment = {"parent": "2", "f_amount": "100", "f_method": "EFECTIVO"}
+    assert "Campo obligatorio" in text(c.post("/p/registrar-pago", data=payment))
+    assert "Registro no encontrado" in text(c.post("/p/registrar-pago", data=payment | {"f_customer": "999"}))
+    assert c.post("/p/registrar-pago", data=payment | {"f_customer": "1"}).status_code == 302
+
+
+def test_an_amount_field_shows_the_currency_inside(client):
+    page = text(client.get("/p/busqueda-de-facturas?panel=registrar-pago&sel=2"))
+    assert re.search(r'<div class="affix"><span class="affix-text" aria-hidden="true">S/</span> <input id="f_amount"', page)
+
+
 def test_full_payment_marks_invoice_paid(client):
     client.post("/p/registrar-pago", data={"parent": "2", "f_amount": "640", "f_method": "EFECTIVO"})
     assert '<span class="badge tone-success">PAGADA</span>' in text(client.get("/p/busqueda-de-facturas?number=F001-000110"))

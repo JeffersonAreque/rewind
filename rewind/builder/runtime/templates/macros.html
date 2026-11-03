@@ -31,7 +31,9 @@
 
 {% macro field_input(screen, f, value, errors, prefix='f_', entity=None) -%}
 {% set id = prefix ~ f.name %}
-{% set error = errors.get(f.name) if screen.error_style == 'inline' else None %}
+{% set error = errors.get(f.name) %}
+{% set error = error if error and (screen.error_style == 'inline' or error.inline) else None %}
+{% set currency = (spec.data.currency or '')|trim if f.input == 'money' else '' %}
 <div class="field{% if error %} has-error{% endif %}">
   {% if f.input == 'radio' %}
     <fieldset class="radios" data-legacy="{{ f.legacy }}">
@@ -50,11 +52,13 @@
       {% endfor %}
     </select>
     {% else %}
+    {% if currency %}<div class="affix"><span class="affix-text" aria-hidden="true">{{ currency }}</span>{% endif %}
     <input id="{{ id }}" name="{{ id }}" data-legacy="{{ f.legacy }}" value="{{ value or '' }}"
       type="{{ 'password' if f.input == 'password' else 'date' if f.input == 'date' else 'text' }}"
       {% if f.input == 'money' %}inputmode="decimal" class="num"{% endif %}
       {% if f.name == 'username' %}autocomplete="username"{% elif f.input == 'password' %}autocomplete="current-password"{% endif %}
       {% if error %}aria-invalid="true" aria-describedby="{{ id }}-error"{% endif %}>
+    {% if currency %}</div>{% endif %}
     {% endif %}
   {% endif %}
   {% if error %}<p class="field-error" id="{{ id }}-error">{{ icon('alert') }}<span>{{ error }}</span></p>{% endif %}
@@ -63,17 +67,18 @@
 
 {% macro error_box(screen, errors) -%}
 {% set field_errors = errors|dictsort|rejectattr(0, 'equalto', '_')|list %}
-{% if field_errors %}
-  {% if screen.error_style == 'inline' %}
-  <p class="alert" role="alert" data-field-errors>{{ icon('alert') }}<span>Revise {{ 'el campo marcado' if field_errors|length == 1 else 'los campos marcados' }}.</span></p>
-  {% else %}
-  {% set name, text = field_errors[0] %}
+{% set inline = field_errors if screen.error_style == 'inline' else field_errors|selectattr('1.inline')|list %}
+{% set in_dialog = [] if screen.error_style == 'inline' else field_errors|rejectattr('1.inline')|list %}
+{% if inline %}
+  <p class="alert" role="alert" data-field-errors>{{ icon('alert') }}<span>Revise {{ 'el campo marcado' if inline|length == 1 else 'los campos marcados' }}.</span></p>
+{% endif %}
+{% if in_dialog %}
+  {% set name, text = in_dialog[0] %}
   <dialog class="dialog error" open aria-labelledby="err-text">
     {{ icon('alert', 'icon dialog-icon') }}
     <p id="err-text" class="error-text">{% for line in text.split('\n') %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
     <button type="button" class="btn primary" data-legacy="ACEPTAR" data-close data-focus="f_{{ name }}" autofocus>Aceptar</button>
   </dialog>
-  {% endif %}
 {% endif %}
 {%- endmacro %}
 
